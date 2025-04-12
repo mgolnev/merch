@@ -24,6 +24,10 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+@app.route('/<path:filename>')
+def serve_static(filename):
+    return send_from_directory('static', filename)
+
 @app.route('/api/weights', methods=['GET', 'POST'])
 def manage_weights():
     global factor_weights
