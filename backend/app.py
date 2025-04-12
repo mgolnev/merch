@@ -1,194 +1,194 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
+import sqlite3
 import pandas as pd
-import numpy as np
+import json
+from datetime import datetime
 import os
-import xml.etree.ElementTree as ET
 
-app = Flask(__name__)
-CORS(app)
+app = Flask(__name__, static_folder='static')
+CORS(app)  # Разрешаем CORS для всех доменов
 
-# Загружаем данные из Excel
-DATA_FILE = os.path.join(os.path.dirname(__file__), "..", "data.xlsx")
-df = pd.read_excel(DATA_FILE)
-print(f"Данные из Excel успешно загружены. Строк: {len(df)}")
-print(f"Доступные колонки: {df.columns.tolist()}")
+def get_db_connection():
+    conn = sqlite3.connect('merchandise.db')
+    conn.row_factory = sqlite3.Row
+    return conn
 
-# Очищаем и нормализуем артикулы в Excel
-df['Артикул'] = df['Артикул'].astype(str).str.strip().str.upper()
-print(f"Уникальных артикулов в Excel: {df['Артикул'].nunique()}")
-print("Примеры артикулов из Excel:")
-print(df['Артикул'].head().tolist())
+@app.route('/api/products', methods=['GET'])
+def get_products():
+    conn = get_db_connection()
+    query = "SELECT * FROM product"
+    df = pd.read_sql_query(query, conn)
+    conn.close()
+    return jsonify(df.to_dict(orient='records'))
 
-# Загружаем и обрабатываем XML-фид
-FEED_FILE = os.path.join(os.path.dirname(__file__), "feed.xml")
+@app.route('/api/products/stats', methods=['GET'])
+def get_stats():
+    conn = get_db_connection()
+    query = """
+        SELECT 
+            COUNT(*) as total_products,
+            AVG(sessions) as avg_sessions,
+            AVG(product_views) as avg_views,
+            AVG(orders_net) as avg_orders,
+            SUM(revenue_net) as total_revenue
+        FROM product
+    """
+    df = pd.read_sql_query(query, conn)
+    conn.close()
+    return jsonify(df.to_dict(orient='records')[0])
 
-def parse_feed():
-    print("Парсинг XML-фида...")
-    tree = ET.parse(FEED_FILE)
-    root = tree.getroot()
+@app.route('/api/products/categories', methods=['GET'])
+def get_categories():
+    conn = get_db_connection()
+    query = """
+        SELECT 
+            category,
+            COUNT(*) as product_count,
+            AVG(revenue_net) as avg_revenue
+        FROM product
+        GROUP BY category
+        ORDER BY product_count DESC
+    """
+    df = pd.read_sql_query(query, conn)
+    conn.close()
+    return jsonify(df.to_dict(orient='records'))
+
+@app.route('/api/products/category/<category>', methods=['GET'])
+def get_products_by_category(category):
+    conn = get_db_connection()
+    query = """
+        SELECT *
+        FROM product
+        WHERE category = ?
+        ORDER BY revenue_net DESC
+    """
+    df = pd.read_sql_query(query, conn, params=[category])
+    conn.close()
+    return jsonify(df.to_dict(orient='records'))
+
+def calculate_product_score(views, conversions, has_sizes):
+    # Веса факторов (можно настроить)
+    VIEWS_WEIGHT = 0.4
+    CONVERSIONS_WEIGHT = 0.5
+    SIZES_WEIGHT = 0.1
     
-    feed_data = []
-    article_examples = []
-    for offer in root.findall('.//offer'):
-        try:
-            article = offer.find('.//vendorCode')
-            if article is not None:
-                article = article.text.strip().upper()
-                if len(article_examples) < 5:  # Сохраняем первые 5 артикулов для примера
-                    article_examples.append(article)
-            else:
-                continue
-                
-            name = offer.find('.//name')
-            name = name.text if name is not None else None
-            
-            category = offer.find('.//category')
-            category = category.text if category is not None else None
-            
-            pictures = offer.findall('.//picture')
-            picture = pictures[0].text if pictures and len(pictures) > 0 else None
-            
-            if article:  # Добавляем только если есть артикул
-                feed_data.append({
-                    'article': article,
-                    'name': name,
-                    'category': category,
-                    'picture': picture
-                })
-        except Exception as e:
-            print(f"Ошибка при обработке товара: {e}")
-            continue
+    # Нормализация значений
+    normalized_views = min(views / 1000, 1.0)  # Предполагаем, что 1000 просмотров - максимум
+    normalized_conversions = min(conversions / 100, 1.0)  # Предполагаем, что 100 конверсий - максимум
     
-    feed_df = pd.DataFrame(feed_data)
-    print(f"Обработано товаров из фида: {len(feed_df)}")
-    print(f"Уникальных артикулов в фиде: {feed_df['article'].nunique()}")
-    print("Примеры артикулов из фида:")
-    print(article_examples)
-    print(f"Колонки в фиде: {feed_df.columns.tolist()}")
-    return feed_df
-
-# Загружаем данные из фида
-feed_df = parse_feed()
-print(f"Данные из фида загружены. Строк: {len(feed_df)}")
-
-# Объединяем данные
-feed_df['article'] = feed_df['article'].astype(str).str.strip().str.upper()
-
-# Проверяем пересечение артикулов
-excel_articles = set(df['Артикул'].unique())
-feed_articles = set(feed_df['article'].unique())
-common_articles = excel_articles.intersection(feed_articles)
-print(f"Артикулов в Excel: {len(excel_articles)}")
-print(f"Артикулов в фиде: {len(feed_articles)}")
-print(f"Общих артикулов: {len(common_articles)}")
-
-# Объединяем данные
-merged_df = pd.merge(df, feed_df, left_on='Артикул', right_on='article', how='left')
-print(f"Объединенные данные. Строк: {len(merged_df)}")
-print(f"Строк с картинками: {merged_df['picture'].notna().sum()}")
-
-# Проверяем качество объединения
-print("Статистика объединения:")
-print(f"Строк с данными из Excel: {len(df)}")
-print(f"Строк с данными из фида: {len(feed_df)}")
-print(f"Строк после объединения: {len(merged_df)}")
-print(f"Строк без картинок: {merged_df['picture'].isna().sum()}")
+    # Расчет итогового скора
+    score = (normalized_views * VIEWS_WEIGHT + 
+             normalized_conversions * CONVERSIONS_WEIGHT + 
+             (1 if has_sizes else 0) * SIZES_WEIGHT)
+    
+    return score
 
 @app.route('/api/categories', methods=['GET'])
 def get_categories():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
     try:
-        print("Запрос категорий...")
-        # Используем max_Категория для категорий
-        categories = df['max_Категория'].unique().tolist()
-        # Удаляем NaN значения
-        categories = [cat for cat in categories if pd.notna(cat)]
-        print(f"Найдено категорий: {len(categories)}")
-        print(f"Категории: {categories[:5]}...")  # Выводим первые 5 категорий для проверки
+        cursor.execute('SELECT DISTINCT category FROM product WHERE category IS NOT NULL')
+        categories = [row['category'] for row in cursor.fetchall()]
         return jsonify(categories)
     except Exception as e:
-        print(f"Ошибка при получении категорий: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
 
-@app.route('/api/products', methods=['POST'])
-def get_products():
+@app.route('/api/products/merchandising', methods=['GET'])
+def get_merchandised_products():
+    category = request.args.get('category', '')
+    limit = int(request.args.get('limit', 20))
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
     try:
-        data = request.json
-        print(f"Получен запрос на товары: {data}")
-        category = data.get('category')
-        weights = data.get('weights', {
-            'gross_sales': 0.4,
-            'conversion': 0.3,
-            'size_popularity': 0.3
-        })
+        # Получаем отсортированные товары
+        query = '''
+            SELECT 
+                id, 
+                name, 
+                article, 
+                price, 
+                image_url, 
+                COALESCE(views, 0) as views,
+                COALESCE(conversions, 0) as conversions,
+                COALESCE(sizes_available, '[]') as sizes_available,
+                (
+                    COALESCE(views, 0) * 0.4 + 
+                    COALESCE(conversions, 0) * 0.5 + 
+                    CASE WHEN json_array_length(COALESCE(sizes_available, '[]')) > 0 THEN 1 ELSE 0 END * 0.1
+                ) as score
+            FROM product
+        '''
+        params = []
         
-        print(f"Категория: {category}")
-        print(f"Веса до нормализации: {weights}")
+        if category:
+            query += ' WHERE category = ?'
+            params.append(category)
+            
+        query += ' ORDER BY score DESC LIMIT ?'
+        params.append(limit)
         
-        # Проверяем наличие всех необходимых весов
-        required_weights = ['gross_sales', 'conversion', 'size_popularity']
-        if not all(key in weights for key in required_weights):
-            print(f"Отсутствуют необходимые веса. Получено: {weights.keys()}")
-            return jsonify({"error": "Missing required weights"}), 400
+        cursor.execute(query, params)
+        products = cursor.fetchall()
         
-        # Нормализуем веса, если их сумма не равна 1
-        weights_sum = sum(weights.values())
-        if weights_sum != 0:  # Избегаем деления на ноль
-            weights = {k: v/weights_sum for k, v in weights.items()}
-        
-        print(f"Веса после нормализации: {weights}")
-        print(f"Сумма весов: {sum(weights.values())}")
-        
-        # Фильтруем по категории
-        category_df = merged_df[merged_df['max_Категория'] == category].copy()
-        print(f"Найдено товаров в категории {category}: {len(category_df)}")
-        
-        if len(category_df) == 0:
-            return jsonify([])
-        
-        # Нормализуем метрики
-        category_df['gross_sales'] = category_df['Заказы (gross)'].fillna(0)
-        category_df['conversion'] = category_df['CR gross'].fillna(0)
-        
-        # Нормализация
-        for col in ['gross_sales', 'conversion']:
-            if category_df[col].max() != category_df[col].min():
-                category_df[f'{col}_norm'] = (category_df[col] - category_df[col].min()) / \
-                                          (category_df[col].max() - category_df[col].min())
-            else:
-                category_df[f'{col}_norm'] = 1.0
-        
-        # Рейтинг
-        category_df['rating'] = (
-            weights['gross_sales'] * category_df['gross_sales_norm'] +
-            weights['conversion'] * category_df['conversion_norm']
-        )
-        
-        # Сортировка
-        category_df = category_df.sort_values('rating', ascending=False)
-        
-        # Формируем ответ
+        # Форматируем результат
         result = []
-        for _, row in category_df.iterrows():
-            try:
-                result.append({
-                    'id': str(row['Артикул']),
-                    'name': str(row['Название товара']),
-                    'category': str(row['max_Категория']),
-                    'gross_sales': int(row['Заказы (gross)']) if pd.notna(row['Заказы (gross)']) else 0,
-                    'conversion': float(row['CR gross']) if pd.notna(row['CR gross']) else 0.0,
-                    'rating': float(row['rating']) if pd.notna(row['rating']) else 0.0,
-                    'image_url': str(row['picture']) if pd.notna(row['picture']) else None
-                })
-            except Exception as row_error:
-                print(f"Ошибка при обработке строки: {row_error}")
-                continue
+        for product in products:
+            result.append({
+                'id': product['id'],
+                'name': product['name'],
+                'article': product['article'],
+                'price': product['price'],
+                'image_url': product['image_url'],
+                'views': product['views'],
+                'conversions': product['conversions'],
+                'sizes_available': json.loads(product['sizes_available']),
+                'score': product['score']
+            })
         
-        print(f"Отправляем {len(result)} товаров")
         return jsonify(result)
     except Exception as e:
-        print(f"Ошибка при получении товаров: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/products/<int:product_id>/view', methods=['POST'])
+def increment_product_views(product_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('UPDATE product SET views = COALESCE(views, 0) + 1 WHERE id = ?', (product_id,))
+        conn.commit()
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/products/<int:product_id>/conversion', methods=['POST'])
+def increment_product_conversions(product_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('UPDATE product SET conversions = COALESCE(conversions, 0) + 1 WHERE id = ?', (product_id,))
+        conn.commit()
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/')
+def serve_index():
+    return send_from_directory('static', 'index.html')
 
 if __name__ == '__main__':
-    app.run(debug=True, port=8000, host='127.0.0.1') 
+    app.run(debug=True, port=5001) 

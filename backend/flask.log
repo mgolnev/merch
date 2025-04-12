@@ -1,0 +1,19 @@
+ * Serving Flask app 'app' (lazy loading)
+ * Environment: development
+ * Debug mode: on
+ * Running on http://127.0.0.1:5001/ (Press CTRL+C to quit)
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 740-626-547
+Traceback (most recent call last):
+  File "/Users/golnev/Downloads/GJ/автомерч/backend/app.py", line 68, in <module>
+    app.run(debug=True, port=5001) 
+  File "/Users/golnev/Downloads/GJ/автомерч/backend/venv/lib/python3.10/site-packages/flask/app.py", line 922, in run
+    run_simple(t.cast(str, host), port, self, **options)
+  File "/Users/golnev/Downloads/GJ/автомерч/backend/venv/lib/python3.10/site-packages/werkzeug/serving.py", line 1000, in run_simple
+    _rwr(
+  File "/Users/golnev/Downloads/GJ/автомерч/backend/venv/lib/python3.10/site-packages/werkzeug/_reloader.py", line 418, in run_with_reloader
+    ensure_echo_on()
+  File "/Users/golnev/Downloads/GJ/автомерч/backend/venv/lib/python3.10/site-packages/werkzeug/_reloader.py", line 398, in ensure_echo_on
+    termios.tcsetattr(sys.stdin, termios.TCSANOW, attributes)
+termios.error: (4, 'Interrupted system call')
