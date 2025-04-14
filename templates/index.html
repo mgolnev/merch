@@ -316,6 +316,16 @@
             const categories = await response.json();
             const select = document.getElementById('categorySelect');
             
+            // Сортируем категории по алфавиту
+            categories.sort((a, b) => a.category.localeCompare(b.category, 'ru'));
+            
+            // Сначала добавляем опцию "Все категории"
+            const allOption = document.createElement('option');
+            allOption.value = 'all';
+            allOption.textContent = 'Все категории';
+            select.appendChild(allOption);
+            
+            // Затем добавляем отсортированные категории
             categories.forEach(category => {
                 const option = document.createElement('option');
                 option.value = category.category;
