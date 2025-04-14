@@ -79,10 +79,16 @@
         .sku {
             font-size: 0.875rem;
             color: #6c757d;
-            margin-bottom: 0.75rem;
+            margin-bottom: 0.5rem;
             background-color: #f8f9fa;
             padding: 0.25rem 0.5rem;
             border-radius: 4px;
+            display: inline-block;
+        }
+        .category {
+            font-size: 0.875rem;
+            color: #0d6efd;
+            margin-bottom: 0.75rem;
             display: inline-block;
         }
         .price-block {
@@ -117,32 +123,86 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             margin-bottom: 2rem;
         }
-        .input-group {
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        .filter-section {
+            position: relative;
+            margin-bottom: 0;
+        }
+        .filter-section label {
+            position: absolute;
+            top: -8px;
+            left: 12px;
+            background: white;
+            padding: 0 8px;
+            font-size: 0.8rem;
+            color: #6c757d;
+            z-index: 1;
+        }
+        .filter-section select {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid #dee2e6;
             border-radius: 8px;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%236c757d' class='bi bi-chevron-down' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 1rem center;
+            background-size: 16px;
+        }
+        .filter-section select:focus {
+            border-color: #86b7fe;
+            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+            outline: none;
+        }
+        .input-group {
+            position: relative;
+            margin-bottom: 0;
+        }
+        .input-group label {
+            position: absolute;
+            top: -8px;
+            left: 12px;
+            background: white;
+            padding: 0 8px;
+            font-size: 0.8rem;
+            color: #6c757d;
+            z-index: 1;
         }
         .input-group .form-control {
-            border-right: none;
-            border-radius: 8px 0 0 8px;
             padding: 0.75rem 1rem;
+            border: 1px solid #dee2e6;
+            border-radius: 8px 0 0 8px;
+            font-size: 0.95rem;
         }
         .input-group .btn {
+            border: 1px solid #dee2e6;
             border-left: none;
-            background-color: white;
             border-radius: 0 8px 8px 0;
             padding: 0.75rem 1rem;
+            background-color: white;
         }
         .input-group .btn:hover {
             background-color: #f8f9fa;
         }
-        .form-select {
-            border-color: #dee2e6;
-            border-radius: 8px;
-            padding: 0.75rem 1rem;
+        .form-switch {
+            padding-left: 3.5em;
         }
         .form-switch .form-check-input {
             width: 3em;
             height: 1.5em;
+            margin-left: -3.5em;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3E%3Ccircle r='3' fill='rgba%28255, 255, 255, 1%29'/%3E%3C/svg%3E");
+            background-position: left center;
+            border-radius: 2em;
+            transition: background-position .15s ease-in-out;
+        }
+        .form-switch .form-check-input:checked {
+            background-position: right center;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3E%3Ccircle r='3' fill='rgba%28255, 255, 255, 1%29'/%3E%3C/svg%3E");
+        }
+        .form-check-label {
+            font-size: 0.95rem;
+            color: #495057;
+            cursor: pointer;
         }
         .header {
             background-color: white;
@@ -172,10 +232,6 @@
         .form-check {
             margin-bottom: 0;
         }
-        .form-check-label {
-            font-size: 0.95rem;
-            color: #495057;
-        }
     </style>
 </head>
 <body>
@@ -191,23 +247,44 @@
     <div class="container">
         <div class="filters-container">
             <div class="row align-items-center">
-                <div class="col-md-4">
-                    <div class="input-group mb-3">
-                        <input type="text" class="form-control" id="searchInput" placeholder="Поиск по артикулу...">
+                <div class="col-md-3">
+                    <div class="input-group">
+                        <label for="searchInput">Поиск по артикулу</label>
+                        <input type="text" class="form-control" id="searchInput" placeholder="Введите артикул...">
                         <button class="btn btn-outline-secondary" type="button" id="searchButton">
                             <i class="bi bi-search"></i>
                         </button>
                     </div>
                 </div>
-                <div class="col-md-4">
-                    <select id="categorySelect" class="form-select">
-                        <option value="all">Все категории</option>
-                    </select>
+                <div class="col-md-3">
+                    <div class="filter-section">
+                        <label for="categorySelect">Категория</label>
+                        <select id="categorySelect" class="form-select">
+                            <option value="all">Все категории</option>
+                        </select>
+                    </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
+                    <div class="filter-section">
+                        <label for="genderFilter">Пол</label>
+                        <select id="genderFilter">
+                            <option value="all">Все полы</option>
+                            <option value="Девочки">Девочки</option>
+                            <option value="Женщины">Женщины</option>
+                            <option value="Мальчики">Мальчики</option>
+                            <option value="Мужчины">Мужчины</option>
+                            <option value="Унисекс">Унисекс</option>
+                            <option value="empty">Не указан</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-3">
                     <div class="form-check form-switch">
                         <input class="form-check-input" type="checkbox" id="hideNoPriceSwitch" checked>
-                        <label class="form-check-label" for="hideNoPriceSwitch">Скрыть товары без цены</label>
+                        <label class="form-check-label" for="hideNoPriceSwitch">
+                            <i class="bi bi-tag-fill me-1"></i>
+                            Скрыть товары без цены
+                        </label>
                     </div>
                 </div>
             </div>
@@ -229,6 +306,7 @@
     <script>
         let currentPage = 1;
         let currentCategory = 'all';
+        let currentGender = 'all';
         let totalPages = 1;
         let hideNoPrice = true;
         let searchQuery = '';
@@ -293,90 +371,158 @@
                     e.preventDefault();
                     const page = parseInt(e.target.dataset.page);
                     if (!isNaN(page) && page !== currentPage) {
-                        loadProducts(currentCategory, page);
+                        loadProducts(currentCategory, page, searchQuery, currentGender);
                     }
                 });
             });
         }
 
-        async function loadProducts(category = 'all', page = 1, search = '') {
-            currentCategory = category;
-            currentPage = page;
-            searchQuery = search;
+        function createProductCard(product) {
+            const card = document.createElement('div');
+            card.className = 'col-md-4 col-lg-3 product-card';
             
-            const response = await fetch(`/api/products?category=${category}&page=${page}&hide_no_price=${hideNoPrice}&search=${search}`);
-            const data = await response.json();
-            const container = document.getElementById('productsContainer');
-            container.innerHTML = '';
-            
-            totalPages = data.total_pages;
-            createPagination(page, data.total_pages);
+            const hasDiscount = product.discount && product.discount > 0;
+            const oldPrice = product.price;
+            const currentPrice = hasDiscount ? 
+                Math.round(product.price * (1 - product.discount / 100)) : 
+                Math.round(product.price || 0);
 
-            data.products.forEach(product => {
-                const card = document.createElement('div');
-                card.className = 'col-md-4 col-lg-3 product-card';
-                
-                const hasDiscount = product.discount && product.discount > 0;
-                const oldPrice = product.price;
-                const currentPrice = hasDiscount ? 
-                    Math.round(product.price * (1 - product.discount / 100)) : 
-                    Math.round(product.price || 0);
-
-                card.innerHTML = `
-                    <div class="card">
-                        <div class="image-container">
-                            <div class="score-badge">Скор: <span class="score-value">${product.score}</span></div>
-                            ${product.image_url ? 
-                                `<img src="${product.image_url}" class="product-image" alt="${product.name}" 
-                                     onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\\'text-center text-muted\\'>Изображение недоступно</div>'">` 
-                                : '<div class="text-center text-muted">Изображение недоступно</div>'
-                            }
+            card.innerHTML = `
+                <div class="card">
+                    <div class="image-container">
+                        <div class="score-badge">Скор: <span class="score-value">${product.score}</span></div>
+                        ${product.image_url ? 
+                            `<img src="${product.image_url}" class="product-image" alt="${product.name}" 
+                                 onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\\'text-center text-muted\\'>Изображение недоступно</div>'">` 
+                            : '<div class="text-center text-muted">Изображение недоступно</div>'
+                        }
+                    </div>
+                    <div class="card-body">
+                        <h5 class="card-title">${product.name || 'Без названия'}</h5>
+                        <div class="sku">
+                            <i class="bi bi-tag"></i> ${product.sku || 'Н/Д'}
                         </div>
-                        <div class="card-body">
-                            <h5 class="card-title">${product.name || 'Без названия'}</h5>
-                            <div class="sku">
-                                <i class="bi bi-tag"></i> ${product.sku || 'Н/Д'}
-                            </div>
-                            <div class="price-block">
-                                <span class="current-price">${currentPrice} ₽</span>
-                                ${hasDiscount ? `
-                                    <span class="old-price">${Math.round(oldPrice)} ₽</span>
-                                    <span class="discount-badge">-${Math.round(product.discount)}%</span>
-                                ` : ''}
-                            </div>
-                            <div class="metrics">
-                                <p>Сессии <span>${product.sessions || 0}</span></p>
-                                <p>Просмотры <span>${product.product_views || 0}</span></p>
-                                <p>Добавления в корзину <span>${product.cart_additions || 0}</span></p>
-                                <p>Оформления <span>${product.checkout_starts || 0}</span></p>
-                                <p>Заказы (Gross) <span>${product.orders_gross || 0}</span></p>
-                                <p>Заказы (Net) <span>${product.orders_net || 0}</span></p>
-                            </div>
+                        <div class="category">
+                            <i class="bi bi-folder"></i> ${product.category || 'Без категории'}
+                        </div>
+                        <div class="gender">
+                            <i class="bi bi-gender-ambiguous"></i> ${product.gender || 'Не указан'}
+                        </div>
+                        <div class="price-block">
+                            <span class="current-price">${currentPrice} ₽</span>
+                            ${hasDiscount ? `
+                                <span class="old-price">${Math.round(oldPrice)} ₽</span>
+                                <span class="discount-badge">-${Math.round(product.discount)}%</span>
+                            ` : ''}
+                        </div>
+                        <div class="metrics">
+                            <p>Сессии <span>${product.sessions || 0}</span></p>
+                            <p>Просмотры <span>${product.product_views || 0}</span></p>
+                            <p>Добавления в корзину <span>${product.cart_additions || 0}</span></p>
+                            <p>Оформления <span>${product.checkout_starts || 0}</span></p>
+                            <p>Заказы (Gross) <span>${product.orders_gross || 0}</span></p>
+                            <p>Заказы (Net) <span>${product.orders_net || 0}</span></p>
                         </div>
                     </div>
-                `;
-                container.appendChild(card);
-            });
+                </div>
+            `;
+            
+            return card;
+        }
+
+        function updatePagination(currentPage, totalPages) {
+            const pagination = document.getElementById('pagination');
+            pagination.innerHTML = '';
+            
+            if (totalPages <= 1) return;
+            
+            // Предыдущая страница
+            const prevBtn = document.createElement('button');
+            prevBtn.className = 'btn btn-outline-primary' + (currentPage === 1 ? ' disabled' : '');
+            prevBtn.innerHTML = '&laquo;';
+            if (currentPage > 1) {
+                prevBtn.onclick = () => loadProducts(currentPage - 1);
+            }
+            pagination.appendChild(prevBtn);
+            
+            // Номера страниц
+            for (let i = 1; i <= totalPages; i++) {
+                if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
+                    const pageBtn = document.createElement('button');
+                    pageBtn.className = 'btn ' + (i === currentPage ? 'btn-primary' : 'btn-outline-primary');
+                    pageBtn.textContent = i;
+                    pageBtn.onclick = () => loadProducts(i);
+                    pagination.appendChild(pageBtn);
+                } else if (i === currentPage - 3 || i === currentPage + 3) {
+                    const dots = document.createElement('span');
+                    dots.className = 'pagination-dots';
+                    dots.textContent = '...';
+                    pagination.appendChild(dots);
+                }
+            }
+            
+            // Следующая страница
+            const nextBtn = document.createElement('button');
+            nextBtn.className = 'btn btn-outline-primary' + (currentPage === totalPages ? ' disabled' : '');
+            nextBtn.innerHTML = '&raquo;';
+            if (currentPage < totalPages) {
+                nextBtn.onclick = () => loadProducts(currentPage + 1);
+            }
+            pagination.appendChild(nextBtn);
+        }
+
+        function loadProducts(page = 1) {
+            const category = document.getElementById('categorySelect').value;
+            const hideNoPrice = document.getElementById('hideNoPriceSwitch').checked;
+            const search = document.getElementById('searchInput').value;
+            const gender = document.getElementById('genderFilter').value;
+            
+            fetch(`/api/products?category=${category}&page=${page}&hide_no_price=${hideNoPrice}&search=${search}&gender=${gender}`)
+                .then(response => response.json())
+                .then(data => {
+                    const container = document.getElementById('productsContainer');
+                    container.innerHTML = '';
+                    
+                    if (data.products && data.products.length > 0) {
+                        data.products.forEach(product => {
+                            const card = createProductCard(product);
+                            container.appendChild(card);
+                        });
+                        
+                        updatePagination(data.current_page, data.total_pages);
+                    } else {
+                        container.innerHTML = '<p class="no-products">Товары не найдены</p>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    const container = document.getElementById('productsContainer');
+                    container.innerHTML = '<p class="error">Ошибка при загрузке товаров</p>';
+                });
         }
 
         document.getElementById('categorySelect').addEventListener('change', (e) => {
-            loadProducts(e.target.value, 1);
+            loadProducts(1, searchQuery, currentGender);
+        });
+
+        document.getElementById('genderFilter').addEventListener('change', (e) => {
+            loadProducts(1, searchQuery, e.target.value);
         });
 
         document.getElementById('hideNoPriceSwitch').addEventListener('change', (e) => {
             hideNoPrice = e.target.checked;
-            loadProducts(currentCategory, 1);
+            loadProducts(1, searchQuery, currentGender);
         });
 
         document.getElementById('searchButton').addEventListener('click', () => {
             const searchValue = document.getElementById('searchInput').value.trim();
-            loadProducts(currentCategory, 1, searchValue);
+            loadProducts(1, searchValue, currentGender);
         });
 
         document.getElementById('searchInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 const searchValue = document.getElementById('searchInput').value.trim();
-                loadProducts(currentCategory, 1, searchValue);
+                loadProducts(1, searchValue, currentGender);
             }
         });
 

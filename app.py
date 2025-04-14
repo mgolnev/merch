@@ -9,32 +9,27 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
-def calculate_score(product):
+def calculate_score(product, weights):
     # Базовый скор
     score = 1.0
     
-    # Получаем сохраненные веса из базы данных или используем значения по умолчанию
-    conn = get_db_connection()
-    weights = conn.execute('SELECT * FROM weights ORDER BY id DESC LIMIT 1').fetchone()
-    conn.close()
-    
     if weights:
         # Применяем веса к метрикам
-        if product['sessions']:
+        if product.get('sessions'):
             score *= (1 + (weights['sessions_weight'] - 1) * (product['sessions'] / 100))
-        if product['product_views']:
+        if product.get('product_views'):
             score *= (1 + (weights['views_weight'] - 1) * (product['product_views'] / 100))
-        if product['cart_additions']:
+        if product.get('cart_additions'):
             score *= (1 + (weights['cart_weight'] - 1) * (product['cart_additions'] / 10))
-        if product['checkout_starts']:
+        if product.get('checkout_starts'):
             score *= (1 + (weights['checkout_weight'] - 1) * (product['checkout_starts'] / 10))
-        if product['orders_gross']:
+        if product.get('orders_gross'):
             score *= (1 + (weights['orders_gross_weight'] - 1) * (product['orders_gross'] / 5))
-        if product['orders_net']:
+        if product.get('orders_net'):
             score *= (1 + (weights['orders_net_weight'] - 1) * (product['orders_net'] / 5))
         
         # Применяем штраф за скидку
-        if product['discount'] and weights['discount_penalty']:
+        if product.get('discount') and weights['discount_penalty']:
             score *= (1 - (product['discount'] / 100) * weights['discount_penalty'])
     
     return round(score, 2)
@@ -77,59 +72,81 @@ def weights_page():
 @app.route('/api/products')
 def get_products():
     category = request.args.get('category', 'all')
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 30, type=int)
+    page = int(request.args.get('page', 1))
     hide_no_price = request.args.get('hide_no_price', 'true').lower() == 'true'
     search = request.args.get('search', '')
+    gender = request.args.get('gender', 'all')
+    
+    per_page = 12
     offset = (page - 1) * per_page
     
     conn = get_db_connection()
     
-    price_filter = "AND p.price IS NOT NULL AND p.price > 0" if hide_no_price else ""
-    search_filter = f"AND p.sku LIKE '%{search}%'" if search else ""
-    
-    # Получаем все товары для сортировки
-    if category == 'all':
-        products = conn.execute(f'''
+    try:
+        # Базовые условия для WHERE
+        where_conditions = []
+        params = []
+        
+        if category != 'all':
+            where_conditions.append("p.category = ?")
+            params.append(category)
+        
+        if hide_no_price:
+            where_conditions.append("p.price > 0")
+        
+        if search:
+            where_conditions.append("p.sku LIKE ?")
+            params.append(f"%{search}%")
+        
+        if gender != 'all':
+            if gender == 'empty':
+                where_conditions.append("(p.gender IS NULL OR p.gender = '')")
+            else:
+                where_conditions.append("p.gender = ?")
+                params.append(gender)
+        
+        where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
+        
+        # Получаем все товары с метриками
+        query = f"""
             SELECT p.*, pm.* 
             FROM products p 
             LEFT JOIN product_metrics pm ON p.sku = pm.sku
-            WHERE 1=1 {price_filter} {search_filter}
-        ''').fetchall()
-    else:
-        products = conn.execute(f'''
-            SELECT p.*, pm.* 
-            FROM products p 
-            LEFT JOIN product_metrics pm ON p.sku = pm.sku
-            WHERE p.category = ? {price_filter} {search_filter}
-        ''', (category,)).fetchall()
-    
-    conn.close()
-    
-    # Преобразуем результаты и добавляем скор
-    products_with_score = []
-    for product in products:
-        product_dict = dict(product)
-        product_dict['score'] = calculate_score(product_dict)
-        products_with_score.append(product_dict)
-    
-    # Сортируем по скору
-    products_with_score.sort(key=lambda x: x['score'], reverse=True)
-    
-    # Получаем общее количество товаров
-    total = len(products_with_score)
-    
-    # Выбираем только нужную страницу
-    paginated_products = products_with_score[offset:offset + per_page]
-    
-    return jsonify({
-        'products': paginated_products,
-        'total': total,
-        'page': page,
-        'per_page': per_page,
-        'total_pages': (total + per_page - 1) // per_page,
-        'hide_no_price': hide_no_price
-    })
+            WHERE {where_clause}
+        """
+        print(f"Executing query: {query} with params: {params}")  # Добавляем логирование
+        products = conn.execute(query, params).fetchall()
+        
+        # Получаем веса для расчета скоринга
+        weights = conn.execute("SELECT * FROM weights ORDER BY id DESC LIMIT 1").fetchone()
+        
+        # Преобразуем товары в словари и добавляем скоринг
+        products_list = []
+        for product in products:
+            product_dict = dict(product)
+            product_dict['score'] = calculate_score(product_dict, weights)
+            products_list.append(product_dict)
+        
+        # Сортируем все товары по скору
+        products_list.sort(key=lambda x: x['score'], reverse=True)
+        
+        # Получаем общее количество товаров
+        total_products = len(products_list)
+        total_pages = (total_products + per_page - 1) // per_page
+        
+        # Выбираем только нужную страницу
+        paginated_products = products_list[offset:offset + per_page]
+        
+        return jsonify({
+            'products': paginated_products,
+            'total_pages': total_pages,
+            'current_page': page
+        })
+    except Exception as e:
+        print(f"Error: {str(e)}")  # Добавляем логирование ошибок
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
 
 @app.route('/api/categories')
 def get_categories():
