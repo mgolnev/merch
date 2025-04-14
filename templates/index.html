@@ -232,6 +232,64 @@
         .form-check {
             margin-bottom: 0;
         }
+        .category-search {
+            position: relative;
+            margin-bottom: 1rem;
+        }
+        
+        .category-search input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 0.95rem;
+        }
+        
+        .category-search input:focus {
+            border-color: #86b7fe;
+            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+            outline: none;
+        }
+        
+        .category-select {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .category-select option {
+            padding: 0.5rem 1rem;
+        }
+        
+        .category-search-container {
+            position: relative;
+        }
+        
+        .category-search-clear {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #6c757d;
+            cursor: pointer;
+            padding: 0;
+            font-size: 1.2rem;
+            display: none;
+            z-index: 2;
+        }
+        
+        .category-search-clear:hover {
+            color: #dc3545;
+        }
+        
+        .category-search-clear.visible {
+            display: block;
+        }
+        
+        #categorySearch {
+            padding-right: 2.5rem;
+        }
     </style>
 </head>
 <body>
@@ -258,8 +316,14 @@
                 </div>
                 <div class="col-md-3">
                     <div class="filter-section">
-                        <label for="categorySelect">Категория</label>
-                        <select id="categorySelect" class="form-select">
+                        <label for="categorySearch">Категория</label>
+                        <div class="category-search-container">
+                            <input type="text" id="categorySearch" class="form-control" placeholder="Поиск по категории...">
+                            <button type="button" class="category-search-clear" id="categoryClear">
+                                <i class="bi bi-x-circle"></i>
+                            </button>
+                        </div>
+                        <select id="categorySelect" class="form-select category-select" size="1">
                             <option value="all">Все категории</option>
                         </select>
                     </div>
@@ -310,29 +374,130 @@
         let totalPages = 1;
         let hideNoPrice = true;
         let searchQuery = '';
+        let allCategories = [];
 
         async function loadCategories() {
             const response = await fetch('/api/categories');
             const categories = await response.json();
-            const select = document.getElementById('categorySelect');
             
-            // Сортируем категории по алфавиту
+            allCategories = categories;
+            
             categories.sort((a, b) => a.category.localeCompare(b.category, 'ru'));
             
-            // Сначала добавляем опцию "Все категории"
+            updateCategorySelect();
+        }
+
+        function updateCategorySelect(searchQuery = '') {
+            const select = document.getElementById('categorySelect');
+            const clearButton = document.getElementById('categoryClear');
+            select.innerHTML = '';
+            
+            // Показываем/скрываем кнопку очистки
+            clearButton.classList.toggle('visible', searchQuery.length > 0);
+            
             const allOption = document.createElement('option');
             allOption.value = 'all';
             allOption.textContent = 'Все категории';
             select.appendChild(allOption);
             
-            // Затем добавляем отсортированные категории
-            categories.forEach(category => {
-                const option = document.createElement('option');
-                option.value = category.category;
-                option.textContent = category.category;
-                select.appendChild(option);
-            });
+            allCategories
+                .filter(cat => !searchQuery || cat.category.toLowerCase().includes(searchQuery.toLowerCase()))
+                .forEach(category => {
+                    const option = document.createElement('option');
+                    option.value = category.category;
+                    option.textContent = category.category;
+                    select.appendChild(option);
+                });
+            
+            // Показываем список при наличии поискового запроса или при фокусе на поле поиска
+            const searchInput = document.getElementById('categorySearch');
+            if (searchQuery || document.activeElement === searchInput) {
+                select.size = Math.min(10, select.options.length);
+                select.classList.add('show');
+            } else {
+                select.size = 1;
+                select.classList.remove('show');
+            }
         }
+
+        // Добавляем обработчик для кнопки очистки
+        document.getElementById('categoryClear').addEventListener('click', () => {
+            const searchInput = document.getElementById('categorySearch');
+            const categorySelect = document.getElementById('categorySelect');
+            
+            // Очищаем поле поиска
+            searchInput.value = '';
+            
+            // Сбрасываем select на "Все категории"
+            categorySelect.value = 'all';
+            
+            // Обновляем список категорий
+            updateCategorySelect('');
+            
+            // Перезагружаем товары с новым фильтром
+            loadProducts(1);
+            
+            // Возвращаем фокус в поле поиска
+            searchInput.focus();
+        });
+
+        // Добавляем обработчик фокуса для поля поиска
+        document.getElementById('categorySearch').addEventListener('focus', () => {
+            updateCategorySelect(document.getElementById('categorySearch').value.trim());
+        });
+
+        document.addEventListener('click', (e) => {
+            const select = document.getElementById('categorySelect');
+            const search = document.getElementById('categorySearch');
+            const clearBtn = document.getElementById('categoryClear');
+            if (!select.contains(e.target) && !search.contains(e.target) && !clearBtn.contains(e.target)) {
+                select.size = 1;
+                select.classList.remove('show');
+            }
+        });
+
+        const style = document.createElement('style');
+        style.textContent = `
+            .filter-section {
+                position: relative;
+            }
+            .category-select {
+                position: absolute;
+                width: 100%;
+                z-index: 1000;
+                background: white;
+                border: 1px solid #dee2e6;
+                border-radius: 8px;
+                margin-top: 5px;
+                display: none;
+            }
+            .category-select.show {
+                display: block;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            }
+            .category-select option {
+                padding: 8px 12px;
+                cursor: pointer;
+            }
+            .category-select option:hover {
+                background-color: #f8f9fa;
+            }
+        `;
+        document.head.appendChild(style);
+
+        document.getElementById('categorySearch').addEventListener('input', (e) => {
+            updateCategorySelect(e.target.value.trim());
+        });
+
+        document.getElementById('categorySelect').addEventListener('change', () => {
+            const selectedOption = document.getElementById('categorySelect').options[
+                document.getElementById('categorySelect').selectedIndex
+            ];
+            document.getElementById('categorySearch').value = selectedOption.text;
+            document.getElementById('categorySelect').size = 1;
+            document.getElementById('categorySelect').classList.remove('show');
+            loadProducts(1);
+        });
 
         function createPagination(currentPage, totalPages) {
             const pagination = document.getElementById('pagination');
@@ -484,8 +649,13 @@
         function loadProducts(page = 1) {
             const category = document.getElementById('categorySelect').value;
             const hideNoPrice = document.getElementById('hideNoPriceSwitch').checked;
-            const search = document.getElementById('searchInput').value;
+            const search = document.getElementById('searchInput').value.trim();
             const gender = document.getElementById('genderFilter').value;
+            
+            currentPage = page;
+            currentCategory = category;
+            currentGender = gender;
+            searchQuery = search;
             
             fetch(`/api/products?category=${category}&page=${page}&hide_no_price=${hideNoPrice}&search=${search}&gender=${gender}`)
                 .then(response => response.json())
@@ -501,44 +671,37 @@
                         
                         updatePagination(data.current_page, data.total_pages);
                     } else {
-                        container.innerHTML = '<p class="no-products">Товары не найдены</p>';
+                        container.innerHTML = '<p class="text-center mt-5">Товары не найдены</p>';
                     }
                 })
                 .catch(error => {
                     console.error('Error:', error);
                     const container = document.getElementById('productsContainer');
-                    container.innerHTML = '<p class="error">Ошибка при загрузке товаров</p>';
+                    container.innerHTML = '<p class="text-center mt-5 text-danger">Ошибка при загрузке товаров</p>';
                 });
         }
 
-        document.getElementById('categorySelect').addEventListener('change', (e) => {
-            loadProducts(1, searchQuery, currentGender);
+        document.getElementById('genderFilter').addEventListener('change', () => {
+            loadProducts(1);
         });
 
-        document.getElementById('genderFilter').addEventListener('change', (e) => {
-            loadProducts(1, searchQuery, e.target.value);
-        });
-
-        document.getElementById('hideNoPriceSwitch').addEventListener('change', (e) => {
-            hideNoPrice = e.target.checked;
-            loadProducts(1, searchQuery, currentGender);
+        document.getElementById('hideNoPriceSwitch').addEventListener('change', () => {
+            loadProducts(1);
         });
 
         document.getElementById('searchButton').addEventListener('click', () => {
-            const searchValue = document.getElementById('searchInput').value.trim();
-            loadProducts(1, searchValue, currentGender);
+            loadProducts(1);
         });
 
         document.getElementById('searchInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
-                const searchValue = document.getElementById('searchInput').value.trim();
-                loadProducts(1, searchValue, currentGender);
+                loadProducts(1);
             }
         });
 
         // Загрузка данных при открытии страницы
         loadCategories();
-        loadProducts();
+        loadProducts(1);
     </script>
 </body>
 </html> 
