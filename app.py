@@ -80,32 +80,29 @@ def get_products():
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 30, type=int)
     hide_no_price = request.args.get('hide_no_price', 'true').lower() == 'true'
+    search = request.args.get('search', '')
     offset = (page - 1) * per_page
     
     conn = get_db_connection()
     
     price_filter = "AND p.price IS NOT NULL AND p.price > 0" if hide_no_price else ""
+    search_filter = f"AND p.sku LIKE '%{search}%'" if search else ""
     
-    # Получаем общее количество товаров для пагинации
+    # Получаем все товары для сортировки
     if category == 'all':
-        total = conn.execute(f'SELECT COUNT(*) as count FROM products p WHERE 1=1 {price_filter}').fetchone()['count']
         products = conn.execute(f'''
             SELECT p.*, pm.* 
             FROM products p 
             LEFT JOIN product_metrics pm ON p.sku = pm.sku
-            WHERE 1=1 {price_filter}
-            LIMIT ? OFFSET ?
-        ''', (per_page, offset)).fetchall()
+            WHERE 1=1 {price_filter} {search_filter}
+        ''').fetchall()
     else:
-        total = conn.execute(f'SELECT COUNT(*) as count FROM products p WHERE category = ? {price_filter}', 
-                           (category,)).fetchone()['count']
         products = conn.execute(f'''
             SELECT p.*, pm.* 
             FROM products p 
             LEFT JOIN product_metrics pm ON p.sku = pm.sku
-            WHERE p.category = ? {price_filter}
-            LIMIT ? OFFSET ?
-        ''', (category, per_page, offset)).fetchall()
+            WHERE p.category = ? {price_filter} {search_filter}
+        ''', (category,)).fetchall()
     
     conn.close()
     
@@ -119,8 +116,14 @@ def get_products():
     # Сортируем по скору
     products_with_score.sort(key=lambda x: x['score'], reverse=True)
     
+    # Получаем общее количество товаров
+    total = len(products_with_score)
+    
+    # Выбираем только нужную страницу
+    paginated_products = products_with_score[offset:offset + per_page]
+    
     return jsonify({
-        'products': products_with_score,
+        'products': paginated_products,
         'total': total,
         'page': page,
         'per_page': per_page,

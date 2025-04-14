@@ -154,7 +154,6 @@
 
                 if (response.ok) {
                     alert('Настройки успешно сохранены');
-                    window.location.href = '/';
                 } else {
                     const data = await response.json();
                     alert(data.message || 'Ошибка при сохранении настроек');
