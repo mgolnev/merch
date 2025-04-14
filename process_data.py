@@ -1,0 +1,116 @@
+import pandas as pd
+import xml.etree.ElementTree as ET
+import requests
+from io import BytesIO
+
+def load_and_process_excel(excel_file='data.xlsx'):
+    """Загрузка и обработка данных из Excel"""
+    print("Загрузка данных из Excel...")
+    df = pd.read_excel(excel_file)
+    
+    # Группировка числовых метрик по артикулу
+    numeric_columns = [
+        'Сессии', 'Карточка товара', 'Добавление в корзину',
+        'Начало чекаута', 'Кол-во товаров', 'Заказы (gross)',
+        'Заказы (net)', 'Выручка без НДС', 'Выручка без НДС (net)'
+    ]
+    
+    # Группировка текстовых полей (берем первое значение)
+    text_columns = [
+        'Название товара', 'max_Категория'
+    ]
+    
+    # Создаем словарь для агрегации
+    agg_dict = {col: 'sum' for col in numeric_columns}
+    agg_dict.update({col: 'first' for col in text_columns})
+    
+    # Группируем данные
+    grouped_df = df.groupby('Артикул').agg(agg_dict)
+    
+    print(f"Обработано {len(grouped_df)} уникальных артикулов")
+    return grouped_df
+
+def process_xml_data(xml_url='https://storage-cdn11.gloria-jeans.ru/catalog/feeds/AnyQuery-gjStore.xml'):
+    """Загрузка и обработка данных из XML"""
+    print("Загрузка данных из XML...")
+    
+    try:
+        # Загружаем XML
+        response = requests.get(xml_url)
+        response.raise_for_status()  # Проверяем успешность запроса
+        root = ET.fromstring(response.content)
+        
+        # Создаем словарь для хранения данных
+        products_data = {}
+        
+        # Обрабатываем каждый товар
+        for offer in root.findall('.//offer'):
+            product_id = offer.get('id')
+            if product_id:
+                # Получаем нужные данные
+                price = float(offer.find('price').text) if offer.find('price') is not None else None
+                oldprice = float(offer.find('oldprice').text) if offer.find('oldprice') is not None else price
+                gender = None
+                for param in offer.findall('param'):
+                    if param.get('name') == 'Пол':
+                        gender = param.text
+                        break
+                
+                # Получаем первое изображение
+                first_picture = offer.find('picture')
+                image_url = first_picture.text if first_picture is not None else None
+                
+                # Рассчитываем скидку
+                discount = round(((oldprice - price) / oldprice * 100), 2) if oldprice and price and oldprice > price else 0
+                
+                # Сохраняем данные
+                products_data[product_id] = {
+                    'price': price,
+                    'oldprice': oldprice,
+                    'discount': discount,
+                    'gender': gender,
+                    'image_url': image_url
+                }
+        
+        print(f"Обработано {len(products_data)} товаров из XML")
+        return products_data
+    
+    except requests.exceptions.RequestException as e:
+        print(f"Ошибка при загрузке XML: {e}")
+        # Создаем пустой словарь для тестирования
+        return {}
+
+def merge_and_save_data(excel_df, xml_data, output_file='processed_data.xlsx'):
+    """Объединение данных и сохранение результата"""
+    print("Объединение данных...")
+    
+    # Преобразуем индекс в колонку
+    excel_df = excel_df.reset_index()
+    
+    # Создаем DataFrame из XML данных
+    xml_df = pd.DataFrame.from_dict(xml_data, orient='index')
+    xml_df.index.name = 'Артикул'
+    xml_df = xml_df.reset_index()
+    
+    # Объединяем данные
+    result_df = pd.merge(excel_df, xml_df, on='Артикул', how='left')
+    
+    # Сохраняем результат
+    result_df.to_excel(output_file, index=False)
+    print(f"Результат сохранен в {output_file}")
+    
+    # Выводим пример данных
+    print("\nПример обработанных данных:")
+    print(result_df.head())
+    
+    return result_df
+
+if __name__ == "__main__":
+    # Обработка Excel
+    excel_df = load_and_process_excel()
+    
+    # Обработка XML
+    xml_data = process_xml_data()
+    
+    # Объединение и сохранение
+    result_df = merge_and_save_data(excel_df, xml_data) 
