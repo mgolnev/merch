@@ -571,10 +571,8 @@
             card.className = 'col-md-4 col-lg-3 product-card';
             
             const hasDiscount = product.discount && product.discount > 0;
-            const oldPrice = product.price;
-            const currentPrice = hasDiscount ? 
-                Math.round(product.price * (1 - product.discount / 100)) : 
-                Math.round(product.price || 0);
+            const currentPrice = Math.round(product.price || 0);
+            const oldPrice = Math.round(product.oldprice || 0);
 
             card.innerHTML = `
                 <div class="card">
@@ -607,7 +605,7 @@
                         <div class="price-block">
                             <span class="current-price">${currentPrice} ₽</span>
                             ${hasDiscount ? `
-                                <span class="old-price">${Math.round(oldPrice)} ₽</span>
+                                <span class="old-price">${oldPrice} ₽</span>
                                 <span class="discount-badge">-${Math.round(product.discount)}%</span>
                             ` : ''}
                         </div>
