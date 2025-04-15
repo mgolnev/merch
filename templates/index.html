@@ -577,11 +577,11 @@
                 Math.round(product.price || 0);
 
             card.innerHTML = `
-                <a href="https://www.gloria-jeans.ru/p/${product.sku}" 
-                   target="_blank" 
-                   rel="noopener noreferrer" 
-                   class="text-decoration-none text-dark">
-                    <div class="card">
+                <div class="card">
+                    <a href="https://www.gloria-jeans.ru/p/${product.sku}" 
+                       target="_blank" 
+                       rel="noopener noreferrer" 
+                       class="text-decoration-none text-dark">
                         <div class="image-container">
                             <div class="score-badge">Скор: <span class="score-value">${product.score}</span></div>
                             ${product.image_url ? 
@@ -592,33 +592,35 @@
                         </div>
                         <div class="card-body">
                             <h5 class="card-title">${product.name || 'Без названия'}</h5>
-                            <div class="sku">
-                                <i class="bi bi-tag"></i> ${product.sku || 'Н/Д'}
-                            </div>
-                            <div class="category">
-                                <i class="bi bi-folder"></i> ${product.category || 'Без категории'}
-                            </div>
-                            <div class="gender">
-                                <i class="bi bi-gender-ambiguous"></i> ${product.gender || 'Не указан'}
-                            </div>
-                            <div class="price-block">
-                                <span class="current-price">${currentPrice} ₽</span>
-                                ${hasDiscount ? `
-                                    <span class="old-price">${Math.round(oldPrice)} ₽</span>
-                                    <span class="discount-badge">-${Math.round(product.discount)}%</span>
-                                ` : ''}
-                            </div>
-                            <div class="metrics">
-                                <p>Сессии <span>${product.sessions || 0}</span></p>
-                                <p>Просмотры <span>${product.product_views || 0}</span></p>
-                                <p>Добавления в корзину <span>${product.cart_additions || 0}</span></p>
-                                <p>Оформления <span>${product.checkout_starts || 0}</span></p>
-                                <p>Заказы (Gross) <span>${product.orders_gross || 0}</span></p>
-                                <p>Заказы (Net) <span>${product.orders_net || 0}</span></p>
-                            </div>
+                        </div>
+                    </a>
+                    <div class="card-body pt-0">
+                        <div class="sku">
+                            <i class="bi bi-tag"></i> ${product.sku || 'Н/Д'}
+                        </div>
+                        <div class="category">
+                            <i class="bi bi-folder"></i> ${product.category || 'Без категории'}
+                        </div>
+                        <div class="gender">
+                            <i class="bi bi-gender-ambiguous"></i> ${product.gender || 'Не указан'}
+                        </div>
+                        <div class="price-block">
+                            <span class="current-price">${currentPrice} ₽</span>
+                            ${hasDiscount ? `
+                                <span class="old-price">${Math.round(oldPrice)} ₽</span>
+                                <span class="discount-badge">-${Math.round(product.discount)}%</span>
+                            ` : ''}
+                        </div>
+                        <div class="metrics">
+                            <p>Сессии <span>${product.sessions || 0}</span></p>
+                            <p>Просмотры <span>${product.product_views || 0}</span></p>
+                            <p>Добавления в корзину <span>${product.cart_additions || 0}</span></p>
+                            <p>Оформления <span>${product.checkout_starts || 0}</span></p>
+                            <p>Заказы (Gross) <span>${product.orders_gross || 0}</span></p>
+                            <p>Заказы (Net) <span>${product.orders_net || 0}</span></p>
                         </div>
                     </div>
-                </a>
+                </div>
             `;
             
             return card;
