@@ -1,7 +1,7 @@
 import sqlite3
 
 def check_database():
-    conn = sqlite3.connect('merchandise.db')
+    conn = sqlite3.connect('products.db')
     cursor = conn.cursor()
 
     # Проверка существования всех таблиц
@@ -33,8 +33,6 @@ def check_database():
         print(f"- Просмотры: {weight[1]}")
         print(f"- Корзина: {weight[2]}")
         print(f"- Заказы: {weight[3]}")
-        print(f"- Выручка: {weight[4]}")
-        print(f"- Скидка: {weight[5]}")
 
     # Проверка сезонных множителей
     cursor.execute("SELECT * FROM seasonal_multipliers")

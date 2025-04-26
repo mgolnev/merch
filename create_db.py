@@ -38,6 +38,34 @@ def create_database(db_name='merchandise.db'):
     )
     ''')
 
+    # Создаем таблицу weights
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS weights (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sessions_weight DECIMAL(10,2) DEFAULT 1.0,
+        views_weight DECIMAL(10,2) DEFAULT 1.0,
+        cart_weight DECIMAL(10,2) DEFAULT 1.0,
+        checkout_weight DECIMAL(10,2) DEFAULT 1.0,
+        orders_gross_weight DECIMAL(10,2) DEFAULT 1.0,
+        orders_net_weight DECIMAL(10,2) DEFAULT 1.0,
+        discount_penalty DECIMAL(10,2) DEFAULT 0.0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    ''')
+
+    # Вставляем начальные значения в таблицу weights
+    cursor.execute('''
+    INSERT OR IGNORE INTO weights (
+        sessions_weight,
+        views_weight,
+        cart_weight,
+        checkout_weight,
+        orders_gross_weight,
+        orders_net_weight,
+        discount_penalty
+    ) VALUES (1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0)
+    ''')
+
     conn.commit()
     return conn
 
@@ -58,13 +86,13 @@ def import_data(conn, excel_file='processed_data.xlsx'):
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 row['Артикул'],
-                row['Название товара'],
-                row['max_Категория'],
-                row['gender'],
-                row['image_url'],
-                row['price'],
-                row['oldprice'],
-                row['discount']
+                row.get('name', row.get('Название товара', '')),
+                row.get('category', row.get('max_Категория', '')),
+                row.get('gender', ''),
+                row.get('image_url', ''),
+                row.get('price', 0),
+                row.get('oldprice', 0),
+                row.get('discount', 0)
             ))
             
             # Импорт метрик
@@ -76,15 +104,15 @@ def import_data(conn, excel_file='processed_data.xlsx'):
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 row['Артикул'],
-                row['Сессии'],
-                row['Карточка товара'],
-                row['Добавление в корзину'],
-                row['Начало чекаута'],
-                row['Кол-во товаров'],
-                row['Заказы (gross)'],
-                row['Заказы (net)'],
-                row['Выручка без НДС'],
-                row['Выручка без НДС (net)']
+                row.get('Сессии', 0),
+                row.get('Карточка товара', 0),
+                row.get('Добавление в корзину', 0),
+                row.get('Начало чекаута', 0),
+                row.get('Кол-во товаров', 0),
+                row.get('Заказы (gross)', 0),
+                row.get('Заказы (net)', 0),
+                row.get('Выручка без НДС', 0),
+                row.get('Выручка без НДС (net)', 0)
             ))
             
         except Exception as e:
@@ -98,7 +126,7 @@ def verify_data(conn):
     cursor = conn.cursor()
     
     # Проверяем количество записей в каждой таблице
-    for table in ['products', 'product_metrics']:
+    for table in ['products', 'product_metrics', 'weights']:
         cursor.execute(f"SELECT COUNT(*) FROM {table}")
         count = cursor.fetchone()[0]
         print(f"\nКоличество записей в таблице {table}: {count}")

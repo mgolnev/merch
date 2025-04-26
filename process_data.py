@@ -48,6 +48,8 @@ def process_xml_data(xml_url='https://storage-cdn11.gloria-jeans.ru/catalog/feed
             product_id = offer.get('id')
             if product_id:
                 # Получаем нужные данные
+                name = offer.findtext('name', '')
+                category = offer.findtext('category', '')
                 price = float(offer.find('price').text) if offer.find('price') is not None else None
                 oldprice = float(offer.find('oldprice').text) if offer.find('oldprice') is not None else price
                 gender = None
@@ -65,6 +67,8 @@ def process_xml_data(xml_url='https://storage-cdn11.gloria-jeans.ru/catalog/feed
                 
                 # Сохраняем данные
                 products_data[product_id] = {
+                    'name': name,
+                    'category': category,
                     'price': price,
                     'oldprice': oldprice,
                     'discount': discount,
@@ -93,7 +97,13 @@ def merge_and_save_data(excel_df, xml_data, output_file='processed_data.xlsx'):
     xml_df = xml_df.reset_index()
     
     # Объединяем данные
-    result_df = pd.merge(excel_df, xml_df, on='Артикул', how='left')
+    result_df = pd.merge(excel_df, xml_df, on='Артикул', how='outer')
+    
+    # Заполняем пропущенные значения
+    numeric_columns = ['Сессии', 'Карточка товара', 'Добавление в корзину',
+                      'Начало чекаута', 'Кол-во товаров', 'Заказы (gross)',
+                      'Заказы (net)', 'Выручка без НДС', 'Выручка без НДС (net)']
+    result_df[numeric_columns] = result_df[numeric_columns].fillna(0)
     
     # Сохраняем результат
     result_df.to_excel(output_file, index=False)
