@@ -109,10 +109,20 @@ def get_products():
         
         # Получаем все товары с метриками и порядком в категории
         query = f"""
-            SELECT p.*, pm.*, co.position as category_position 
+            WITH CategoryRanks AS (
+                SELECT 
+                    p.sku,
+                    p.max_Категория,
+                    RANK() OVER (PARTITION BY p.max_Категория ORDER BY COALESCE(co.position, 999999), -pm.sessions, -pm.product_views) as category_rank
+                FROM products p
+                LEFT JOIN product_metrics pm ON p.sku = pm.sku
+                LEFT JOIN category_order co ON p.sku = co.sku AND co.category = p.max_Категория
+            )
+            SELECT p.*, pm.*, co.position as category_position, cr.category_rank
             FROM products p 
             LEFT JOIN product_metrics pm ON p.sku = pm.sku
             LEFT JOIN category_order co ON p.sku = co.sku AND co.category = p.max_Категория
+            LEFT JOIN CategoryRanks cr ON p.sku = cr.sku
             WHERE {where_clause}
         """
         print(f"Executing query: {query} with params: {params}")

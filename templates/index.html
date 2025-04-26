@@ -619,7 +619,9 @@
                         <div class="image-container">
                             <div class="score-badge">
                                 #${orderNumber} | Скор: <span class="score-value">${product.score}</span>
-                                ${product.category_position ? ` | Позиция в категории: ${product.category_position}` : ''}
+                                ${product.category_position ? 
+                                    ` | Позиция в категории: ${product.category_position}` : 
+                                    ` | Ранг в категории: ${product.category_rank}`}
                             </div>
                             ${product.image_url ? 
                                 `<img src="${product.image_url}" class="product-image" alt="${product.name}" 
