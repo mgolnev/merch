@@ -107,14 +107,15 @@ def get_products():
         
         where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
         
-        # Получаем все товары с метриками
+        # Получаем все товары с метриками и порядком в категории
         query = f"""
-            SELECT p.*, pm.* 
+            SELECT p.*, pm.*, co.position as category_position 
             FROM products p 
             LEFT JOIN product_metrics pm ON p.sku = pm.sku
+            LEFT JOIN category_order co ON p.sku = co.sku AND co.category = p.max_Категория
             WHERE {where_clause}
         """
-        print(f"Executing query: {query} with params: {params}")  # Добавляем логирование
+        print(f"Executing query: {query} with params: {params}")
         products = conn.execute(query, params).fetchall()
         
         # Получаем веса для расчета скоринга
@@ -127,8 +128,18 @@ def get_products():
             product_dict['score'] = calculate_score(product_dict, weights)
             products_list.append(product_dict)
         
-        # Сортируем все товары по скору
-        products_list.sort(key=lambda x: x['score'], reverse=True)
+        # Сортируем товары:
+        # - Если выбрана конкретная категория и есть позиции - по позиции
+        # - Иначе по общему скору
+        if category != 'all':
+            products_list.sort(
+                key=lambda x: (
+                    x['category_position'] if x['category_position'] is not None else float('inf'),
+                    -x['score']
+                )
+            )
+        else:
+            products_list.sort(key=lambda x: x['score'], reverse=True)
         
         # Получаем общее количество товаров
         total_products = len(products_list)
@@ -143,7 +154,7 @@ def get_products():
             'current_page': page
         })
     except Exception as e:
-        print(f"Error: {str(e)}")  # Добавляем логирование ошибок
+        print(f"Error: {str(e)}")
         return jsonify({'error': str(e)}), 500
     finally:
         conn.close()
@@ -185,6 +196,52 @@ def update_weights():
     except Exception as e:
         conn.close()
         return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/api/category_score', methods=['POST'])
+def update_category_score():
+    data = request.json
+    sku = data.get('sku')
+    category = data.get('category')
+    score = data.get('score')
+    
+    if not all([sku, category, score]):
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    conn = get_db_connection()
+    try:
+        conn.execute('''
+            INSERT OR REPLACE INTO category_scores (sku, category, score)
+            VALUES (?, ?, ?)
+        ''', (sku, category, score))
+        conn.commit()
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/category_order', methods=['POST'])
+def update_category_order():
+    data = request.json
+    sku = data.get('sku')
+    category = data.get('category')
+    position = data.get('position')
+    
+    if not all([sku, category, position]):
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    conn = get_db_connection()
+    try:
+        conn.execute('''
+            INSERT OR REPLACE INTO category_order (sku, category, position)
+            VALUES (?, ?, ?)
+        ''', (sku, category, position))
+        conn.commit()
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
 
 if __name__ == '__main__':
     app.run(debug=True, port=3001) 
