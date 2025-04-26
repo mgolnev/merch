@@ -70,6 +70,15 @@ def process_data():
         logging.error(f"Ошибка при обработке данных: {str(e)}")
         raise
 
+def update_categories():
+    """Обновление категорий товаров"""
+    try:
+        logging.info("=== Обновление категорий ===")
+        run_script('update_categories.py', "Обновление категорий товаров")
+    except Exception as e:
+        logging.error(f"Ошибка при обновлении категорий: {str(e)}")
+        raise
+
 def restart_application():
     """Перезапуск приложения"""
     try:
@@ -104,7 +113,10 @@ def main():
         # Шаг 4: Обработка данных
         process_data()
         
-        # Шаг 5: Перезапуск приложения
+        # Шаг 5: Обновление категорий
+        update_categories()
+        
+        # Шаг 6: Перезапуск приложения
         restart_application()
         
         logging.info("=== Процесс обновления данных успешно завершен! ===")

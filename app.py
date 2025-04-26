@@ -88,7 +88,7 @@ def get_products():
         params = []
         
         if category != 'all':
-            where_conditions.append("p.category = ?")
+            where_conditions.append("p.max_Категория = ?")
             params.append(category)
         
         if hide_no_price:
@@ -151,9 +151,9 @@ def get_products():
 @app.route('/api/categories')
 def get_categories():
     conn = get_db_connection()
-    categories = conn.execute('SELECT DISTINCT category FROM products').fetchall()
+    categories = conn.execute('SELECT DISTINCT max_Категория as category FROM products WHERE max_Категория IS NOT NULL AND max_Категория != ""').fetchall()
     conn.close()
-    return jsonify([dict(category) for category in categories])
+    return jsonify([dict(category) for category in categories if category['category']])
 
 @app.route('/api/update_weights', methods=['POST'])
 def update_weights():
