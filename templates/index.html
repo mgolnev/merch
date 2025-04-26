@@ -331,7 +331,14 @@
         <div class="container">
             <div class="d-flex justify-content-between align-items-center">
                 <h1 class="h3 mb-0">Каталог товаров</h1>
-                <a href="/weights" class="btn btn-primary">Настройка скоринга</a>
+                <div>
+                    <button type="button" class="btn btn-outline-danger me-2" id="resetButton">
+                        <i class="bi bi-arrow-counterclockwise"></i> Сбросить веса
+                    </button>
+                    <a href="/weights" class="btn btn-outline-primary">
+                        <i class="bi bi-sliders"></i> Настройка скоринга
+                    </a>
+                </div>
             </div>
         </div>
     </div>
@@ -808,6 +815,40 @@
         // Загрузка данных при открытии страницы
         loadCategories();
         loadProducts(1);
+
+        // Добавляем обработчик для кнопки сброса
+        document.getElementById('resetButton').addEventListener('click', async () => {
+            const category = document.getElementById('categorySelect').value;
+            
+            if (category === 'all') {
+                alert('Пожалуйста, выберите категорию для сброса ручных позиций');
+                return;
+            }
+            
+            if (confirm(`Вы уверены, что хотите сбросить ручные позиции в категории "${category}"? Это действие нельзя отменить.`)) {
+                try {
+                    const response = await fetch('/api/reset_category_order', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ category })
+                    });
+
+                    if (response.ok) {
+                        alert('Ручные позиции успешно сброшены');
+                        // Перезагружаем страницу для отображения новых значений
+                        window.location.reload();
+                    } else {
+                        const data = await response.json();
+                        alert(data.message || 'Ошибка при сбросе ручных позиций');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('Произошла ошибка при сбросе ручных позиций');
+                }
+            }
+        });
     </script>
 </body>
 </html> 

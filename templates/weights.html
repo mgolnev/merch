@@ -164,20 +164,29 @@
             }
         });
 
-        resetButton.addEventListener('click', () => {
-            const defaultWeights = {
-                sessions_weight: 1.0,
-                views_weight: 1.0,
-                cart_weight: 1.0,
-                checkout_weight: 1.0,
-                orders_gross_weight: 1.0,
-                orders_net_weight: 1.0,
-                discount_penalty: 0.0
-            };
+        resetButton.addEventListener('click', async () => {
+            if (confirm('Вы уверены, что хотите сбросить все веса и ручные позиции? Это действие нельзя отменить.')) {
+                try {
+                    const response = await fetch('/api/reset_weights', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
 
-            Object.keys(defaultWeights).forEach(key => {
-                document.getElementById(key).value = defaultWeights[key];
-            });
+                    if (response.ok) {
+                        alert('Веса и ручные позиции успешно сброшены');
+                        // Перезагружаем страницу для отображения новых значений
+                        window.location.reload();
+                    } else {
+                        const data = await response.json();
+                        alert(data.message || 'Ошибка при сбросе весов');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('Произошла ошибка при сбросе весов');
+                }
+            }
         });
     </script>
 </body>

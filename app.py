@@ -113,18 +113,37 @@ def get_products():
                 SELECT 
                     p.sku,
                     p.max_Категория,
-                    RANK() OVER (PARTITION BY p.max_Категория ORDER BY COALESCE(co.position, 999999), -pm.sessions, -pm.product_views) as category_rank
+                    RANK() OVER (
+                        PARTITION BY p.max_Категория 
+                        ORDER BY 
+                            CASE 
+                                WHEN co.position IS NOT NULL THEN 1
+                                ELSE 2
+                            END,
+                            co.position,
+                            -pm.sessions DESC,
+                            -pm.product_views DESC
+                    ) as category_rank,
+                    co.position as category_position
                 FROM products p
                 LEFT JOIN product_metrics pm ON p.sku = pm.sku
                 LEFT JOIN category_order co ON p.sku = co.sku AND co.category = p.max_Категория
             )
-            SELECT p.*, pm.*, co.position as category_position, cr.category_rank
+            SELECT 
+                p.*,
+                pm.*,
+                cr.category_position,
+                cr.category_rank,
+                RANK() OVER (ORDER BY 
+                    COALESCE(pm.sessions, 0) DESC,
+                    COALESCE(pm.product_views, 0) DESC
+                ) as global_rank
             FROM products p 
             LEFT JOIN product_metrics pm ON p.sku = pm.sku
-            LEFT JOIN category_order co ON p.sku = co.sku AND co.category = p.max_Категория
             LEFT JOIN CategoryRanks cr ON p.sku = cr.sku
             WHERE {where_clause}
         """
+        
         print(f"Executing query: {query} with params: {params}")
         products = conn.execute(query, params).fetchall()
         
@@ -135,21 +154,23 @@ def get_products():
         products_list = []
         for product in products:
             product_dict = dict(product)
+            # Вычисляем скор на основе весов (не зависит от ручной сортировки)
             product_dict['score'] = calculate_score(product_dict, weights)
             products_list.append(product_dict)
         
-        # Сортируем товары:
-        # - Если выбрана конкретная категория и есть позиции - по позиции
-        # - Иначе по общему скору
+        # Сортируем товары
         if category != 'all':
+            # В категории: сначала по ручным позициям, потом по скору
             products_list.sort(
                 key=lambda x: (
+                    0 if x['category_position'] is not None else 1,
                     x['category_position'] if x['category_position'] is not None else float('inf'),
                     -x['score']
                 )
             )
         else:
-            products_list.sort(key=lambda x: x['score'], reverse=True)
+            # В общем каталоге: только по скору
+            products_list.sort(key=lambda x: -x['score'])
         
         # Получаем общее количество товаров
         total_products = len(products_list)
@@ -250,6 +271,52 @@ def update_category_order():
         return jsonify({'status': 'success'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/reset_weights', methods=['POST'])
+def reset_weights():
+    conn = get_db_connection()
+    try:
+        # Сбрасываем веса к значениям по умолчанию
+        conn.execute('''
+            INSERT INTO weights (
+                sessions_weight,
+                views_weight,
+                cart_weight,
+                checkout_weight,
+                orders_gross_weight,
+                orders_net_weight,
+                discount_penalty
+            ) VALUES (1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0)
+        ''')
+        
+        # Удаляем все ручные позиции
+        conn.execute('DELETE FROM category_order')
+        
+        conn.commit()
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+    finally:
+        conn.close()
+
+@app.route('/api/reset_category_order', methods=['POST'])
+def reset_category_order():
+    data = request.json
+    category = data.get('category')
+    
+    if not category:
+        return jsonify({'status': 'error', 'message': 'Не указана категория'}), 400
+    
+    conn = get_db_connection()
+    try:
+        # Удаляем ручные позиции только для указанной категории
+        conn.execute('DELETE FROM category_order WHERE category = ?', (category,))
+        conn.commit()
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
     finally:
         conn.close()
 
