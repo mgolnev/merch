@@ -1,6 +1,8 @@
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, send_file
 import sqlite3
 import json
+import csv
+import io
 
 app = Flask(__name__)
 
@@ -317,6 +319,76 @@ def reset_category_order():
         return jsonify({'status': 'success'})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
+    finally:
+        conn.close()
+
+@app.route('/api/export_category/<category>')
+def export_category(category):
+    conn = get_db_connection()
+    try:
+        # Получаем данные о позициях товаров в категории
+        query = """
+            WITH CategoryRanks AS (
+                SELECT 
+                    p.sku,
+                    p.max_Категория,
+                    RANK() OVER (
+                        PARTITION BY p.max_Категория 
+                        ORDER BY 
+                            CASE 
+                                WHEN co.position IS NOT NULL THEN 1
+                                ELSE 2
+                            END,
+                            co.position,
+                            -pm.sessions DESC,
+                            -pm.product_views DESC
+                    ) as category_rank,
+                    co.position as category_position
+                FROM products p
+                LEFT JOIN product_metrics pm ON p.sku = pm.sku
+                LEFT JOIN category_order co ON p.sku = co.sku AND co.category = p.max_Категория
+                WHERE p.max_Категория = ?
+            )
+            SELECT 
+                p.sku,
+                cr.category_position,
+                cr.category_rank
+            FROM products p 
+            LEFT JOIN CategoryRanks cr ON p.sku = cr.sku
+            WHERE p.max_Категория = ?
+            ORDER BY 
+                CASE 
+                    WHEN cr.category_position IS NOT NULL THEN 1
+                    ELSE 2
+                END,
+                cr.category_position,
+                cr.category_rank
+        """
+        
+        products = conn.execute(query, (category, category)).fetchall()
+        
+        # Создаем CSV в памяти
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['Артикул', 'Позиция в категории'])
+        
+        for product in products:
+            writer.writerow([
+                product['sku'],
+                product['category_position'] if product['category_position'] is not None else product['category_rank']
+            ])
+        
+        # Подготавливаем файл для отправки
+        output.seek(0)
+        return send_file(
+            io.BytesIO(output.getvalue().encode('utf-8')),
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=f'{category}_positions.csv'
+        )
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
     finally:
         conn.close()
 
