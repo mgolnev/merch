@@ -20,13 +20,14 @@
         .card {
             border: none;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: all 0.3s ease;
             height: 100%;
             border-radius: 12px;
+            background: white;
         }
         .card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
         }
         .image-container {
             height: 300px;
@@ -119,9 +120,9 @@
         }
         .filters-container {
             background-color: white;
-            padding: 1.5rem;
-            border-radius: 12px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            padding: 2rem;
+            border-radius: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
             margin-bottom: 2rem;
         }
         .filter-section {
@@ -140,19 +141,18 @@
         }
         .filter-section select {
             width: 100%;
-            padding: 0.75rem 1rem;
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-            appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%236c757d' class='bi bi-chevron-down' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 1rem center;
-            background-size: 16px;
+            padding: 0.875rem 1rem;
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            background-color: #f8f9fa;
+            transition: all 0.2s ease;
+            cursor: pointer;
         }
         .filter-section select:focus {
-            border-color: #86b7fe;
-            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
-            outline: none;
+            background-color: white;
+            border-color: #0d6efd;
+            box-shadow: 0 0 0 4px rgba(13, 110, 253, 0.15);
         }
         .input-group {
             position: relative;
@@ -169,41 +169,55 @@
             z-index: 1;
         }
         .input-group .form-control {
-            padding: 0.75rem 1rem;
-            border: 1px solid #dee2e6;
-            border-radius: 8px 0 0 8px;
+            padding: 0.875rem 1rem;
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
             font-size: 0.95rem;
+            transition: all 0.2s ease;
+            background-color: #f8f9fa;
+        }
+        .input-group .form-control:focus {
+            background-color: white;
+            border-color: #0d6efd;
+            box-shadow: 0 0 0 4px rgba(13, 110, 253, 0.15);
         }
         .input-group .btn {
-            border: 1px solid #dee2e6;
-            border-left: none;
-            border-radius: 0 8px 8px 0;
-            padding: 0.75rem 1rem;
-            background-color: white;
+            margin-left: -1px;
+            padding: 0.875rem 1.25rem;
+            border: 1px solid #e9ecef;
+            background-color: #f8f9fa;
+            color: #6c757d;
+            transition: all 0.2s ease;
+            border-radius: 0 12px 12px 0;
         }
         .input-group .btn:hover {
-            background-color: #f8f9fa;
+            background-color: #0d6efd;
+            border-color: #0d6efd;
+            color: white;
         }
         .form-switch {
             padding-left: 3.5em;
+            display: flex;
+            align-items: center;
         }
         .form-switch .form-check-input {
             width: 3em;
             height: 1.5em;
             margin-left: -3.5em;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3E%3Ccircle r='3' fill='rgba%28255, 255, 255, 1%29'/%3E%3C/svg%3E");
-            background-position: left center;
-            border-radius: 2em;
-            transition: background-position .15s ease-in-out;
+            background-color: #e9ecef;
+            border-color: #e9ecef;
+            cursor: pointer;
+            transition: all 0.2s ease;
         }
         .form-switch .form-check-input:checked {
-            background-position: right center;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3E%3Ccircle r='3' fill='rgba%28255, 255, 255, 1%29'/%3E%3C/svg%3E");
+            background-color: #0d6efd;
+            border-color: #0d6efd;
         }
         .form-check-label {
             font-size: 0.95rem;
             color: #495057;
             cursor: pointer;
+            user-select: none;
         }
         .header {
             background-color: white;
@@ -215,13 +229,13 @@
             position: absolute;
             top: 10px;
             right: 10px;
-            background-color: rgba(0, 0, 0, 0.7);
+            background-color: rgba(33, 37, 41, 0.85);
             color: white;
             padding: 0.5rem 0.75rem;
             border-radius: 8px;
             font-size: 0.875rem;
             z-index: 1;
-            font-weight: 500;
+            backdrop-filter: blur(4px);
         }
         .score-value {
             font-weight: bold;
@@ -263,11 +277,12 @@
         
         .category-search-container {
             position: relative;
+            margin-bottom: 0.75rem;
         }
         
         .category-search-clear {
             position: absolute;
-            right: 12px;
+            right: 1rem;
             top: 50%;
             transform: translateY(-50%);
             background: none;
@@ -275,12 +290,13 @@
             color: #6c757d;
             cursor: pointer;
             padding: 0;
-            font-size: 1.2rem;
-            display: none;
-            z-index: 2;
+            font-size: 1.1rem;
+            opacity: 0.5;
+            transition: all 0.2s ease;
         }
         
         .category-search-clear:hover {
+            opacity: 1;
             color: #dc3545;
         }
         
@@ -289,7 +305,19 @@
         }
         
         #categorySearch {
-            padding-right: 2.5rem;
+            width: 100%;
+            padding: 0.875rem 1rem;
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            background-color: #f8f9fa;
+            transition: all 0.2s ease;
+        }
+
+        #categorySearch:focus {
+            background-color: white;
+            border-color: #0d6efd;
+            box-shadow: 0 0 0 4px rgba(13, 110, 253, 0.15);
         }
 
         .product-card a {
@@ -311,18 +339,126 @@
             background: #c8ebfb;
         }
 
-        #saveCategoryOrder {
-            margin-left: 10px;
-            padding: 5px 15px;
-            background-color: #007bff;
-            color: white;
+        #saveCategoryOrder, #exportCategory {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 500;
+            padding: 0.75rem 1.25rem;
+            border-radius: 12px;
+            transition: all 0.2s ease-in-out;
             border: none;
-            border-radius: 4px;
-            cursor: pointer;
+        }
+
+        #saveCategoryOrder {
+            background-color: #0d6efd;
+            color: white;
         }
 
         #saveCategoryOrder:hover {
-            background-color: #0056b3;
+            background-color: #0b5ed7;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(13, 110, 253, 0.2);
+        }
+
+        #exportCategory {
+            background-color: #198754;
+            color: white;
+        }
+
+        #exportCategory:hover {
+            background-color: #157347;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(25, 135, 84, 0.2);
+        }
+
+        /* Стили для кнопок действий */
+        .action-buttons {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .btn-primary {
+            background-color: #0d6efd;
+            border-color: #0d6efd;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            transition: all 0.2s ease-in-out;
+        }
+
+        .btn-primary:hover {
+            background-color: #0b5ed7;
+            border-color: #0b5ed7;
+            transform: translateY(-1px);
+        }
+
+        .btn-success {
+            background-color: #198754;
+            border-color: #198754;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            transition: all 0.2s ease-in-out;
+        }
+
+        .btn-success:hover {
+            background-color: #157347;
+            border-color: #157347;
+            transform: translateY(-1px);
+        }
+
+        /* Стили для переключателя */
+        .form-switch .form-check-input {
+            width: 3em;
+            height: 1.5em;
+            background-color: #e9ecef;
+            border-color: #e9ecef;
+        }
+
+        .form-switch .form-check-input:checked {
+            background-color: #0d6efd;
+            border-color: #0d6efd;
+        }
+
+        /* Стили для кнопок категорий */
+        .category-buttons {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        /* Стили для поиска */
+        .search-container {
+            position: relative;
+        }
+
+        .search-container .form-control {
+            padding-right: 2.5rem;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+            transition: all 0.2s ease;
+        }
+
+        .search-container .form-control:focus {
+            border-color: #86b7fe;
+            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+        }
+
+        .search-container .btn {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            border: none;
+            background: transparent;
+            color: #6c757d;
+            transition: color 0.2s ease;
+        }
+
+        .search-container .btn:hover {
+            color: #0d6efd;
         }
     </style>
 </head>
@@ -367,9 +503,11 @@
                         <select id="categorySelect" class="form-select category-select" size="1">
                             <option value="all">Все категории</option>
                         </select>
-                        <div class="mt-2">
-                            <button id="saveCategoryOrder" style="display: none;" class="btn btn-primary">Сохранить порядок в категории</button>
-                            <button id="exportCategory" style="display: none;" class="btn btn-success ms-2">
+                        <div class="category-buttons mt-2">
+                            <button id="saveCategoryOrder" style="display: none;" class="btn btn-primary">
+                                <i class="bi bi-save"></i> Сохранить порядок
+                            </button>
+                            <button id="exportCategory" style="display: none;" class="btn btn-success">
                                 <i class="bi bi-download"></i> Выгрузить в CSV
                             </button>
                         </div>
@@ -405,12 +543,22 @@
             <!-- Товары будут загружены здесь -->
         </div>
 
-        <div class="d-flex justify-content-center">
+        <div class="d-flex justify-content-center align-items-center mb-3" style="gap: 1.5rem;">
             <nav aria-label="Навигация по страницам">
                 <ul class="pagination" id="pagination">
                     <!-- Пагинация будет загружена здесь -->
                 </ul>
             </nav>
+            <div class="ms-3">
+                <label for="perPageSelect" class="form-label mb-0 me-2" style="font-weight: 500;">Показывать по:</label>
+                <select id="perPageSelect" class="form-select d-inline-block" style="width: auto; display: inline-block;">
+                    <option value="20">20</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="200">200</option>
+                    <option value="500">500</option>
+                </select>
+            </div>
         </div>
     </div>
 
@@ -423,6 +571,7 @@
         let searchQuery = '';
         let allCategories = [];
         let currentProducts = [];
+        let perPage = 20;
 
         async function loadCategories() {
             const response = await fetch('/api/categories');
@@ -631,9 +780,7 @@
                         <div class="image-container">
                             <div class="score-badge">
                                 #${orderNumber} | Скор: <span class="score-value">${product.score}</span>
-                                ${product.category_position ? 
-                                    ` | Позиция в категории: ${product.category_position}` : 
-                                    ` | Ранг в категории: ${product.category_rank}`}
+                                | Позиция в категории: ${product.category_position !== null && product.category_position !== undefined ? product.category_position : '—'}
                             </div>
                             ${product.image_url ? 
                                 `<img src="${product.image_url}" class="product-image" alt="${product.name}" 
@@ -723,18 +870,19 @@
             const hideNoPrice = document.getElementById('hideNoPriceSwitch').checked;
             const search = document.getElementById('searchInput').value.trim();
             const gender = document.getElementById('genderFilter').value;
+            perPage = parseInt(document.getElementById('perPageSelect').value) || 20;
             
             currentPage = page;
             currentCategory = category;
             currentGender = gender;
             searchQuery = search;
             
-            fetch(`/api/products?category=${encodeURIComponent(category)}&page=${page}&hide_no_price=${hideNoPrice}&search=${encodeURIComponent(search)}&gender=${encodeURIComponent(gender)}`)
+            fetch(`/api/products?category=${encodeURIComponent(category)}&page=${page}&hide_no_price=${hideNoPrice}&search=${encodeURIComponent(search)}&gender=${encodeURIComponent(gender)}&per_page=${perPage}`)
                 .then(response => response.json())
                 .then(data => {
                     currentProducts = data.products;
                     displayProducts(data.products);
-                    updatePagination(data.total_pages, data.current_page);
+                    createPagination(data.current_page, data.total_pages);
                     
                     // Показываем или скрываем кнопки
                     const saveCategoryOrderBtn = document.getElementById('saveCategoryOrder');
@@ -845,8 +993,8 @@
 
                     if (response.ok) {
                         alert('Ручные позиции успешно сброшены');
-                        // Перезагружаем страницу для отображения новых значений
-                        window.location.reload();
+                        // Вместо window.location.reload(); вызываем только обновление товаров
+                        loadProducts(1);
                     } else {
                         const data = await response.json();
                         alert(data.message || 'Ошибка при сбросе ручных позиций');
@@ -866,6 +1014,21 @@
                 return;
             }
             window.location.href = `/api/export_category/${encodeURIComponent(category)}`;
+        });
+
+        // Обновляем обработчики пагинации
+        document.getElementById('pagination').addEventListener('click', (e) => {
+            if (e.target.classList.contains('page-link')) {
+                e.preventDefault();
+                const page = parseInt(e.target.dataset.page);
+                if (!isNaN(page) && page !== currentPage) {
+                    loadProducts(page);
+                }
+            }
+        });
+
+        document.getElementById('perPageSelect').addEventListener('change', function() {
+            loadProducts(1);
         });
     </script>
 </body>

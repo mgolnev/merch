@@ -79,7 +79,7 @@ def get_products():
     search = request.args.get('search', '')
     gender = request.args.get('gender', 'all')
     
-    per_page = 12
+    per_page = int(request.args.get('per_page', 12))
     offset = (page - 1) * per_page
     
     conn = get_db_connection()
