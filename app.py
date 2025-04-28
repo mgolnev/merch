@@ -3,6 +3,274 @@ import sqlite3
 import json
 import csv
 import io
+from typing import List, Tuple, Any, Optional, Dict, Union
+from dataclasses import dataclass
+from enum import Enum
+
+def init_db():
+    """Инициализация базы данных"""
+    conn = sqlite3.connect('merchandise.db')
+    cursor = conn.cursor()
+    
+    # Создаем таблицу products
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS products (
+        sku TEXT PRIMARY KEY,
+        name TEXT,
+        price REAL,
+        oldprice REAL,
+        discount REAL,
+        gender TEXT,
+        max_Категория TEXT,
+        image_url TEXT
+    )
+    ''')
+    
+    # Создаем таблицу product_metrics
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS product_metrics (
+        sku TEXT PRIMARY KEY,
+        sessions INTEGER DEFAULT 0,
+        product_views INTEGER DEFAULT 0,
+        cart_additions INTEGER DEFAULT 0,
+        checkout_starts INTEGER DEFAULT 0,
+        orders_gross INTEGER DEFAULT 0,
+        orders_net INTEGER DEFAULT 0,
+        FOREIGN KEY (sku) REFERENCES products(sku)
+    )
+    ''')
+    
+    # Создаем таблицу weights
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS weights (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sessions_weight REAL DEFAULT 1.0,
+        views_weight REAL DEFAULT 1.0,
+        cart_weight REAL DEFAULT 1.0,
+        checkout_weight REAL DEFAULT 1.0,
+        orders_gross_weight REAL DEFAULT 1.0,
+        orders_net_weight REAL DEFAULT 1.0,
+        discount_penalty REAL DEFAULT 0.0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    ''')
+    
+    # Создаем таблицу category_order
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS category_order (
+        sku TEXT,
+        category TEXT,
+        position INTEGER,
+        PRIMARY KEY (sku, category),
+        FOREIGN KEY (sku) REFERENCES products(sku)
+    )
+    ''')
+    
+    # Добавляем начальные веса, если таблица пуста
+    cursor.execute('SELECT COUNT(*) FROM weights')
+    if cursor.fetchone()[0] == 0:
+        cursor.execute('''
+        INSERT INTO weights (
+            sessions_weight,
+            views_weight,
+            cart_weight,
+            checkout_weight,
+            orders_gross_weight,
+            orders_net_weight,
+            discount_penalty
+        ) VALUES (1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0)
+        ''')
+    
+    conn.commit()
+    conn.close()
+
+# Инициализируем базу данных при запуске
+init_db()
+
+class ValidationError(Exception):
+    """Кастомное исключение для ошибок валидации"""
+    pass
+
+class Gender(Enum):
+    """Enum для валидных значений пола"""
+    ALL = 'all'
+    GIRLS = 'Девочки'
+    WOMEN = 'Женщины'
+    BOYS = 'Мальчики'
+    MEN = 'Мужчины'
+    UNISEX = 'Унисекс'
+    EMPTY = 'empty'
+
+@dataclass
+class ProductFilters:
+    """Класс для хранения фильтров продуктов"""
+    category: str = 'all'
+    page: int = 1
+    hide_no_price: bool = True
+    search: str = ''
+    gender: str = 'all'
+    per_page: int = 20
+
+class InputValidator:
+    """Класс для валидации входных данных"""
+    
+    MAX_SEARCH_LENGTH = 100
+    ALLOWED_PER_PAGE = [20, 50, 100, 200, 500]
+    
+    @staticmethod
+    def validate_product_filters(args: Dict[str, Any]) -> ProductFilters:
+        """Валидация фильтров для продуктов"""
+        try:
+            # Валидация page
+            page = InputValidator.validate_integer(
+                args.get('page', 1),
+                'page',
+                min_value=1,
+                max_value=1000
+            )
+            
+            # Валидация per_page
+            per_page = InputValidator.validate_integer(
+                args.get('per_page', 20),
+                'per_page',
+                allowed_values=InputValidator.ALLOWED_PER_PAGE
+            )
+            
+            # Валидация hide_no_price
+            hide_no_price = str(args.get('hide_no_price', 'true')).lower() == 'true'
+            
+            # Валидация search
+            search = InputValidator.sanitize_string(
+                args.get('search', ''),
+                'search',
+                max_length=InputValidator.MAX_SEARCH_LENGTH
+            )
+            
+            # Валидация gender
+            gender = InputValidator.validate_enum(
+                args.get('gender', 'all'),
+                'gender',
+                Gender
+            )
+            
+            # Валидация category
+            category = InputValidator.sanitize_string(
+                args.get('category', 'all'),
+                'category',
+                max_length=100
+            )
+            
+            return ProductFilters(
+                category=category,
+                page=page,
+                hide_no_price=hide_no_price,
+                search=search,
+                gender=gender,
+                per_page=per_page
+            )
+            
+        except ValidationError as e:
+            raise ValidationError(f"Ошибка валидации фильтров: {str(e)}")
+    
+    @staticmethod
+    def validate_category_order(data: Dict[str, Any]) -> Dict[str, Any]:
+        """Валидация данных для обновления порядка категорий"""
+        try:
+            if not isinstance(data, dict):
+                raise ValidationError("Неверный формат данных")
+                
+            required_fields = ['sku', 'category', 'position']
+            for field in required_fields:
+                if field not in data:
+                    raise ValidationError(f"Отсутствует обязательное поле: {field}")
+            
+            # Валидация SKU
+            sku = InputValidator.sanitize_string(data['sku'], 'sku', max_length=50)
+            
+            # Валидация category
+            category = InputValidator.sanitize_string(data['category'], 'category', max_length=100)
+            
+            # Валидация position
+            position = InputValidator.validate_integer(data['position'], 'position', min_value=1)
+            
+            return {
+                'sku': sku,
+                'category': category,
+                'position': position
+            }
+            
+        except ValidationError as e:
+            raise ValidationError(f"Ошибка валидации order данных: {str(e)}")
+    
+    @staticmethod
+    def validate_integer(
+        value: Union[str, int],
+        field_name: str,
+        min_value: Optional[int] = None,
+        max_value: Optional[int] = None,
+        allowed_values: Optional[List[int]] = None
+    ) -> int:
+        """Валидация целочисленных значений"""
+        try:
+            value = int(value)
+            if min_value is not None and value < min_value:
+                raise ValidationError(f"{field_name} не может быть меньше {min_value}")
+            if max_value is not None and value > max_value:
+                raise ValidationError(f"{field_name} не может быть больше {max_value}")
+            if allowed_values is not None and value not in allowed_values:
+                raise ValidationError(f"{field_name} должен быть одним из {allowed_values}")
+            return value
+        except (TypeError, ValueError):
+            raise ValidationError(f"{field_name} должен быть целым числом")
+    
+    @staticmethod
+    def sanitize_string(
+        value: Optional[str],
+        field_name: str,
+        max_length: int,
+        required: bool = False
+    ) -> str:
+        """Санитизация строковых значений"""
+        if value is None:
+            if required:
+                raise ValidationError(f"{field_name} обязательно для заполнения")
+            return ''
+            
+        value = str(value).strip()
+        if required and not value:
+            raise ValidationError(f"{field_name} не может быть пустым")
+            
+        if len(value) > max_length:
+            raise ValidationError(f"{field_name} не может быть длиннее {max_length} символов")
+            
+        # Базовая санитизация для предотвращения SQL-инъекций
+        value = value.replace("'", "''")
+        return value
+    
+    @staticmethod
+    def validate_enum(value: str, field_name: str, enum_class: type) -> str:
+        """Валидация значений enum"""
+        try:
+            return enum_class(value).value
+        except ValueError:
+            valid_values = [e.value for e in enum_class]
+            raise ValidationError(f"{field_name} должен быть одним из {valid_values}")
+
+class QueryBuilder:
+    def __init__(self):
+        self.conditions: List[str] = []
+        self.parameters: List[Any] = []
+        
+    def add_condition(self, condition: str, value: Any = None) -> None:
+        """Безопасно добавляет условие в WHERE clause"""
+        if value is not None:
+            self.conditions.append(condition)
+            self.parameters.append(value)
+        
+    def build(self) -> Tuple[str, List[Any]]:
+        """Возвращает готовый WHERE clause и параметры"""
+        where_clause = " AND ".join(self.conditions) if self.conditions else "1=1"
+        return where_clause, self.parameters
 
 app = Flask(__name__)
 
@@ -73,131 +341,121 @@ def weights_page():
 
 @app.route('/api/products')
 def get_products():
-    category = request.args.get('category', 'all')
-    page = int(request.args.get('page', 1))
-    hide_no_price = request.args.get('hide_no_price', 'true').lower() == 'true'
-    search = request.args.get('search', '')
-    gender = request.args.get('gender', 'all')
-    
-    per_page = int(request.args.get('per_page', 12))
-    offset = (page - 1) * per_page
-    
-    conn = get_db_connection()
-    
     try:
-        # Базовые условия для WHERE
-        where_conditions = []
-        params = []
+        # Валидация входных данных
+        filters = InputValidator.validate_product_filters(request.args)
         
-        if category != 'all':
-            where_conditions.append("p.max_Категория = ?")
-            params.append(category)
-        
-        if hide_no_price:
-            where_conditions.append("p.price > 0")
-        
-        if search:
-            where_conditions.append("p.sku LIKE ?")
-            params.append(f"%{search}%")
-        
-        if gender != 'all':
-            if gender == 'empty':
-                where_conditions.append("(p.gender IS NULL OR p.gender = '')")
-            else:
-                where_conditions.append("p.gender = ?")
-                params.append(gender)
-        
-        where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
-        
-        # Получаем все товары с метриками и порядком в категории
-        query = f"""
-            WITH CategoryRanks AS (
-                SELECT 
-                    p.sku,
-                    p.max_Категория,
-                    RANK() OVER (
-                        PARTITION BY p.max_Категория 
-                        ORDER BY 
-                            CASE 
-                                WHEN co.position IS NOT NULL THEN 1
-                                ELSE 2
-                            END,
-                            co.position,
-                            -pm.sessions DESC,
-                            -pm.product_views DESC
-                    ) as category_rank,
-                    co.position as category_position
-                FROM products p
-                LEFT JOIN product_metrics pm ON p.sku = pm.sku
-                LEFT JOIN category_order co ON p.sku = co.sku AND co.category = p.max_Категория
-            )
-            SELECT 
-                p.*,
-                pm.*,
-                cr.category_position,
-                cr.category_rank,
-                RANK() OVER (ORDER BY 
-                    COALESCE(pm.sessions, 0) DESC,
-                    COALESCE(pm.product_views, 0) DESC
-                ) as global_rank
-            FROM products p 
-            LEFT JOIN product_metrics pm ON p.sku = pm.sku
-            LEFT JOIN CategoryRanks cr ON p.sku = cr.sku
-            WHERE {where_clause}
-        """
-        
-        print(f"Executing query: {query} with params: {params}")
-        products = conn.execute(query, params).fetchall()
-        
-        # Получаем веса для расчета скоринга
-        weights = conn.execute("SELECT * FROM weights ORDER BY id DESC LIMIT 1").fetchone()
-        
-        # Преобразуем товары в словари и добавляем скоринг
-        products_list = []
-        for product in products:
-            product_dict = dict(product)
-            # Вычисляем скор на основе весов (не зависит от ручной сортировки)
-            product_dict['score'] = calculate_score(product_dict, weights)
-            products_list.append(product_dict)
-        
-        # Сортируем товары
-        if category != 'all':
-            # В категории: сначала по ручным позициям, потом по скору
-            products_list.sort(
-                key=lambda x: (
-                    0 if x['category_position'] is not None else 1,
-                    x['category_position'] if x['category_position'] is not None else float('inf'),
-                    -x['score']
+        conn = get_db_connection()
+        try:
+            query_builder = QueryBuilder()
+            
+            # Используем валидированные данные
+            if filters.category != 'all':
+                query_builder.add_condition("p.max_Категория = ?", filters.category)
+            
+            if filters.hide_no_price:
+                query_builder.add_condition("p.price > 0")
+            
+            if filters.search:
+                query_builder.add_condition("p.sku LIKE ?", f"%{filters.search}%")
+            
+            if filters.gender != 'all':
+                if filters.gender == 'empty':
+                    query_builder.add_condition("(p.gender IS NULL OR p.gender = '')")
+                else:
+                    query_builder.add_condition("p.gender = ?", filters.gender)
+            
+            where_clause, params = query_builder.build()
+            
+            # Базовый запрос с WITH для рейтингов категорий
+            base_query = f"""
+                WITH CategoryRanks AS (
+                    SELECT 
+                        p.sku,
+                        p.max_Категория,
+                        RANK() OVER (
+                            PARTITION BY p.max_Категория 
+                            ORDER BY 
+                                CASE 
+                                    WHEN co.position IS NOT NULL THEN 1
+                                    ELSE 2
+                                END,
+                                co.position,
+                                -pm.sessions DESC,
+                                -pm.product_views DESC
+                        ) as category_rank,
+                        co.position as category_position
+                    FROM products p
+                    LEFT JOIN product_metrics pm ON p.sku = pm.sku
+                    LEFT JOIN category_order co ON p.sku = co.sku AND co.category = p.max_Категория
                 )
-            )
-        else:
-            # В общем каталоге: только по скору
-            products_list.sort(key=lambda x: -x['score'])
-        
-        # Получаем общее количество товаров
-        total_products = len(products_list)
-        total_pages = (total_products + per_page - 1) // per_page
-        
-        # Выбираем только нужную страницу
-        paginated_products = products_list[offset:offset + per_page]
-        
-        return jsonify({
-            'products': paginated_products,
-            'total_pages': total_pages,
-            'current_page': page
-        })
+                SELECT 
+                    p.*,
+                    pm.*,
+                    cr.category_position,
+                    cr.category_rank,
+                    RANK() OVER (ORDER BY 
+                        COALESCE(pm.sessions, 0) DESC,
+                        COALESCE(pm.product_views, 0) DESC
+                    ) as global_rank
+                FROM products p 
+                LEFT JOIN product_metrics pm ON p.sku = pm.sku
+                LEFT JOIN CategoryRanks cr ON p.sku = cr.sku
+                WHERE {where_clause}
+            """
+            
+            products = conn.execute(base_query, params).fetchall()
+            
+            # Получаем веса для расчета скоринга через параметризованный запрос
+            weights = conn.execute("SELECT * FROM weights ORDER BY id DESC LIMIT 1").fetchone()
+            
+            products_list = []
+            for product in products:
+                product_dict = dict(product)
+                product_dict['score'] = calculate_score(product_dict, weights)
+                products_list.append(product_dict)
+            
+            # Сортировка без SQL-инъекций (перенесена в Python)
+            if filters.category != 'all':
+                products_list.sort(
+                    key=lambda x: (
+                        0 if x['category_position'] is not None else 1,
+                        x['category_position'] if x['category_position'] is not None else float('inf'),
+                        -x['score']
+                    )
+                )
+            else:
+                products_list.sort(key=lambda x: -x['score'])
+            
+            offset = (filters.page - 1) * filters.per_page
+            total_products = len(products_list)
+            total_pages = (total_products + filters.per_page - 1) // filters.per_page
+            paginated_products = products_list[offset:offset + filters.per_page]
+            
+            return jsonify({
+                'products': paginated_products,
+                'total_pages': total_pages,
+                'current_page': filters.page
+            })
+            
+        finally:
+            conn.close()
+            
     except Exception as e:
         print(f"Error: {str(e)}")
         return jsonify({'error': str(e)}), 500
-    finally:
-        conn.close()
 
 @app.route('/api/categories')
 def get_categories():
     conn = get_db_connection()
-    categories = conn.execute('SELECT DISTINCT max_Категория as category FROM products WHERE max_Категория IS NOT NULL AND max_Категория != ""').fetchall()
-    conn.close()
-    return jsonify([dict(category) for category in categories if category['category']])
+    try:
+        categories = conn.execute(
+            'SELECT DISTINCT max_Категория as category FROM products WHERE max_Категория IS NOT NULL AND max_Категория != ?',
+            ('',)
+        ).fetchall()
+        return jsonify([dict(category) for category in categories if category['category']])
+    finally:
+        conn.close()
 
 @app.route('/api/update_weights', methods=['POST'])
 def update_weights():
@@ -255,26 +513,25 @@ def update_category_score():
 
 @app.route('/api/category_order', methods=['POST'])
 def update_category_order():
-    data = request.json
-    sku = data.get('sku')
-    category = data.get('category')
-    position = data.get('position')
-    
-    if not all([sku, category, position]):
-        return jsonify({'error': 'Missing required fields'}), 400
-    
-    conn = get_db_connection()
     try:
-        conn.execute('''
-            INSERT OR REPLACE INTO category_order (sku, category, position)
-            VALUES (?, ?, ?)
-        ''', (sku, category, position))
-        conn.commit()
-        return jsonify({'status': 'success'})
+        # Валидация входных данных
+        validated_data = InputValidator.validate_category_order(request.json)
+        
+        conn = get_db_connection()
+        try:
+            conn.execute(
+                'INSERT OR REPLACE INTO category_order (sku, category, position) VALUES (?, ?, ?)',
+                (validated_data['sku'], validated_data['category'], validated_data['position'])
+            )
+            conn.commit()
+            return jsonify({'status': 'success'})
+        finally:
+            conn.close()
+            
+    except ValidationError as e:
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-    finally:
-        conn.close()
 
 @app.route('/api/reset_weights', methods=['POST'])
 def reset_weights():
@@ -313,7 +570,6 @@ def reset_category_order():
     
     conn = get_db_connection()
     try:
-        # Удаляем ручные позиции только для указанной категории
         conn.execute('DELETE FROM category_order WHERE category = ?', (category,))
         conn.commit()
         return jsonify({'status': 'success'})
@@ -391,6 +647,10 @@ def export_category(category):
         return jsonify({'error': str(e)}), 500
     finally:
         conn.close()
+
+@app.errorhandler(ValidationError)
+def handle_validation_error(error):
+    return jsonify({'error': str(error)}), 400
 
 if __name__ == '__main__':
     app.run(debug=True, port=3001) 
