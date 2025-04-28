@@ -13,9 +13,20 @@
         }
         .container {
             max-width: 1400px;
+            margin: 0 auto;
+            padding-left: 15px;
+            padding-right: 15px;
+        }
+        .container-fluid {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding-left: 15px;
+            padding-right: 15px;
         }
         .product-card {
             margin-bottom: 20px;
+            padding-left: 8px;
+            padding-right: 8px;
         }
         .card {
             border: none;
@@ -38,12 +49,13 @@
             justify-content: center;
             position: relative;
             border-radius: 12px 12px 0 0;
+            padding: 0;
         }
         .product-image {
-            max-height: 100%;
-            max-width: 100%;
-            object-fit: contain;
-            padding: 10px;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            padding: 0;
         }
         .metrics {
             font-size: 0.9em;
@@ -460,6 +472,71 @@
         .search-container .btn:hover {
             color: #0d6efd;
         }
+
+        /* === ДОБАВЛЮ СТИЛИ ДЛЯ РЕЗИНОВОЙ ШАПКИ КАРТОЧКИ === */
+        .product-header {
+            background: rgba(33, 37, 41, 0.85);
+            color: #fff;
+            border-radius: 12px 12px 0 0;
+            padding: 0.5rem 0.75rem;
+            min-height: 48px;
+            font-size: 0.95rem;
+            z-index: 2;
+            position: relative;
+        }
+        .score-badge {
+            background: none;
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 500;
+            padding: 0;
+            border-radius: 0;
+            box-shadow: none;
+            position: static;
+            text-align: center;
+            width: 100%;
+        }
+        .pagination-footer {
+            position: fixed;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+            background: #f8f9fa;
+            box-shadow: 0 -2px 8px rgba(0,0,0,0.07);
+            z-index: 100;
+            padding: 0.5rem 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .pagination-footer .container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .pagination-footer nav, .pagination-footer .ms-3 {
+            margin-bottom: 0 !important;
+        }
+        .container-fluid, .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding-left: 15px;
+            padding-right: 15px;
+        }
+        @media (max-width: 768px) {
+            .product-header {
+                font-size: 0.85rem;
+                min-height: 38px;
+                padding: 0.25rem 0.5rem;
+            }
+            .score-badge {
+                font-size: 0.9rem;
+            }
+            .pagination-footer {
+                flex-direction: column;
+                padding: 0.5rem 0.2rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -539,25 +616,27 @@
             </div>
         </div>
 
-        <div class="row" id="productsContainer">
+        <div class="row g-3" id="productsContainer">
             <!-- Товары будут загружены здесь -->
         </div>
 
-        <div class="d-flex justify-content-center align-items-center mb-3" style="gap: 1.5rem;">
-            <nav aria-label="Навигация по страницам">
-                <ul class="pagination" id="pagination">
-                    <!-- Пагинация будет загружена здесь -->
-                </ul>
-            </nav>
-            <div class="ms-3">
-                <label for="perPageSelect" class="form-label mb-0 me-2" style="font-weight: 500;">Показывать по:</label>
-                <select id="perPageSelect" class="form-select d-inline-block" style="width: auto; display: inline-block;">
-                    <option value="20">20</option>
-                    <option value="50">50</option>
-                    <option value="100">100</option>
-                    <option value="200">200</option>
-                    <option value="500">500</option>
-                </select>
+        <div class="pagination-footer">
+            <div class="container">
+                <nav aria-label="Навигация по страницам">
+                    <ul class="pagination" id="pagination">
+                        <!-- Пагинация будет загружена здесь -->
+                    </ul>
+                </nav>
+                <div class="ms-3">
+                    <label for="perPageSelect" class="form-label mb-0 me-2" style="font-weight: 500;">Показывать по:</label>
+                    <select id="perPageSelect" class="form-select d-inline-block" style="width: auto; display: inline-block;">
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                        <option value="500">500</option>
+                    </select>
+                </div>
             </div>
         </div>
     </div>
@@ -773,18 +852,20 @@
 
             card.innerHTML = `
                 <div class="card">
+                    <div class="card-header product-header d-flex flex-wrap align-items-center justify-content-between">
+                        <div class="score-badge flex-grow-1 text-center mb-2 mb-md-0">
+                            #${orderNumber} | Скор: <span class="score-value">${product.score}</span>
+                            | Позиция: ${product.category_position !== null && product.category_position !== undefined ? product.category_position : '—'}
+                        </div>
+                    </div>
                     <a href="https://www.gloria-jeans.ru/p/${product.sku}" 
                        target="_blank" 
                        rel="noopener noreferrer" 
                        class="text-decoration-none text-dark">
                         <div class="image-container">
-                            <div class="score-badge">
-                                #${orderNumber} | Скор: <span class="score-value">${product.score}</span>
-                                | Позиция в категории: ${product.category_position !== null && product.category_position !== undefined ? product.category_position : '—'}
-                            </div>
                             ${product.image_url ? 
                                 `<img src="${product.image_url}" class="product-image" alt="${product.name}" 
-                                     onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\\'text-center text-muted\\'>Изображение недоступно</div>'">` 
+                                     onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\'text-center text-muted\'>Изображение недоступно</div>'">` 
                                 : '<div class="text-center text-muted">Изображение недоступно</div>'
                             }
                         </div>
