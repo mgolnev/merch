@@ -107,8 +107,17 @@ def main():
         # Шаг 2: Очистка базы данных
         clean_database()
         
-        # Шаг 3: Импорт данных
-        import_data()
+        # Шаг 2.5: Подготовка processed_data.xlsx
+        run_script('prepare_processed_data.py', "Подготовка processed_data.xlsx")
+        
+        # === ОТЛАДКА: прямой импорт данных ===
+        import import_data
+        df = import_data.import_excel_data('processed_data.xlsx')
+        xml_data = {}  # если не нужен XML, можно оставить пустым
+        import_data.insert_data_to_db(df, xml_data, 'merchandise.db')
+        
+        # Шаг 3: Импорт данных (старый способ)
+        # import_data()
         
         # Шаг 4: Обработка данных
         process_data()

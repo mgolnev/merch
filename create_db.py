@@ -32,8 +32,6 @@ def create_database(db_name='merchandise.db'):
         quantity INTEGER,
         orders_gross INTEGER,
         orders_net INTEGER,
-        revenue_gross DECIMAL(10,2),
-        revenue_net DECIMAL(10,2),
         FOREIGN KEY (sku) REFERENCES products(sku)
     )
     ''')
@@ -99,9 +97,8 @@ def import_data(conn, excel_file='processed_data.xlsx'):
             cursor.execute('''
             INSERT OR REPLACE INTO product_metrics (
                 sku, sessions, product_views, cart_additions,
-                checkout_starts, quantity, orders_gross, orders_net,
-                revenue_gross, revenue_net
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                checkout_starts, quantity, orders_gross, orders_net
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 row['Артикул'],
                 row.get('Сессии', 0),
@@ -110,9 +107,7 @@ def import_data(conn, excel_file='processed_data.xlsx'):
                 row.get('Начало чекаута', 0),
                 row.get('Кол-во товаров', 0),
                 row.get('Заказы (gross)', 0),
-                row.get('Заказы (net)', 0),
-                row.get('Выручка без НДС', 0),
-                row.get('Выручка без НДС (net)', 0)
+                row.get('Заказы (net)', 0)
             ))
             
         except Exception as e:

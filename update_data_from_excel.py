@@ -45,8 +45,6 @@ def create_tables(conn):
         quantity INTEGER,
         orders_gross INTEGER,
         orders_net INTEGER,
-        revenue_gross REAL,
-        revenue_net REAL,
         FOREIGN KEY (sku) REFERENCES products(sku)
     )
     ''')
@@ -109,9 +107,7 @@ def import_excel_data(conn, excel_file='data.xlsx'):
             'Начало чекаута': 'checkout_starts',
             'Кол-во товаров': 'quantity',
             'Заказы (gross)': 'orders_gross',
-            'Заказы (net)': 'orders_net',
-            'Выручка без НДС': 'revenue_gross',
-            'Выручка без НДС (net)': 'revenue_net'
+            'Заказы (net)': 'orders_net'
         }
         
         # Переименовываем колонки
@@ -119,7 +115,7 @@ def import_excel_data(conn, excel_file='data.xlsx'):
         
         # Заполняем пропущенные значения
         numeric_columns = ['sessions', 'product_views', 'add_to_cart', 'checkout_starts',
-                         'quantity', 'orders_gross', 'orders_net', 'revenue_gross', 'revenue_net']
+                         'quantity', 'orders_gross', 'orders_net']
         df[numeric_columns] = df[numeric_columns].fillna(0)
         
         # Вставляем данные в базу
@@ -142,8 +138,8 @@ def import_excel_data(conn, excel_file='data.xlsx'):
             cursor.execute('''
             INSERT OR REPLACE INTO product_metrics 
             (sku, sessions, product_views, add_to_cart, checkout_starts, 
-             quantity, orders_gross, orders_net, revenue_gross, revenue_net)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             quantity, orders_gross, orders_net)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 row['sku'],
                 row['sessions'],
@@ -152,9 +148,7 @@ def import_excel_data(conn, excel_file='data.xlsx'):
                 row['checkout_starts'],
                 row['quantity'],
                 row['orders_gross'],
-                row['orders_net'],
-                row['revenue_gross'],
-                row['revenue_net']
+                row['orders_net']
             ))
         
         conn.commit()
@@ -219,7 +213,7 @@ def save_processed_data(conn, output_file='processed_data.xlsx'):
         columns = [
             'sku', 'name', 'category', 'price', 'old_price', 'discount', 'gender', 'image_url',
             'sessions', 'product_views', 'add_to_cart', 'checkout_starts', 'quantity',
-            'orders_gross', 'orders_net', 'revenue_gross', 'revenue_net'
+            'orders_gross', 'orders_net'
         ]
         df = pd.DataFrame(cursor.fetchall(), columns=columns)
         

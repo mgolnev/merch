@@ -21,7 +21,7 @@ def init_db():
         oldprice REAL,
         discount REAL,
         gender TEXT,
-        max_Категория TEXT,
+        category TEXT,
         image_url TEXT
     )
     ''')
@@ -51,6 +51,7 @@ def init_db():
         orders_gross_weight REAL DEFAULT 1.0,
         orders_net_weight REAL DEFAULT 1.0,
         discount_penalty REAL DEFAULT 0.0,
+        dnp_weight REAL DEFAULT 1.0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     ''')
@@ -77,8 +78,9 @@ def init_db():
             checkout_weight,
             orders_gross_weight,
             orders_net_weight,
-            discount_penalty
-        ) VALUES (1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0)
+            discount_penalty,
+            dnp_weight
+        ) VALUES (1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 1.0)
         ''')
     
     conn.commit()
@@ -298,6 +300,19 @@ def calculate_score(product, weights):
         if product.get('orders_net'):
             score *= (1 + (weights['orders_net_weight'] - 1) * (product['orders_net'] / 5))
         
+        # Применяем вес DNP только для товаров с прошедшей датой начала продаж
+        if product.get('sale_start_date'):
+            from datetime import datetime, date
+            today = date.today()
+            sale_start = datetime.strptime(product['sale_start_date'], '%Y-%m-%d').date()
+            
+            # Если дата начала продаж в прошлом, применяем штраф
+            if sale_start < today:
+                days_since_sale = (today - sale_start).days
+                # Штраф увеличивается с течением времени, но имеет асимптоту
+                penalty = 1 / (1 + days_since_sale)
+                score *= (1 - (weights['dnp_weight'] - 1) * penalty)
+        
         # Применяем штраф за скидку
         if product.get('discount') and weights['discount_penalty']:
             score *= (1 - (product['discount'] / 100) * weights['discount_penalty'])
@@ -324,7 +339,8 @@ def weights_page():
             'checkout_weight': weights['checkout_weight'],
             'orders_gross_weight': weights['orders_gross_weight'],
             'orders_net_weight': weights['orders_net_weight'],
-            'discount_penalty': weights['discount_penalty']
+            'discount_penalty': weights['discount_penalty'],
+            'dnp_weight': weights['dnp_weight']
         }
     else:
         weights_dict = {
@@ -334,7 +350,8 @@ def weights_page():
             'checkout_weight': 1.0,
             'orders_gross_weight': 1.0,
             'orders_net_weight': 1.0,
-            'discount_penalty': 0.0
+            'discount_penalty': 0.0,
+            'dnp_weight': 1.0
         }
     
     return render_template('weights.html', weights=weights_dict)
@@ -351,7 +368,7 @@ def get_products():
             
             # Используем валидированные данные
             if filters.category != 'all':
-                query_builder.add_condition("p.max_Категория = ?", filters.category)
+                query_builder.add_condition("p.category = ?", filters.category)
             
             if filters.hide_no_price:
                 query_builder.add_condition("p.price > 0")
@@ -372,9 +389,9 @@ def get_products():
                 WITH CategoryRanks AS (
                     SELECT 
                         p.sku,
-                        p.max_Категория,
+                        p.category,
                         RANK() OVER (
-                            PARTITION BY p.max_Категория 
+                            PARTITION BY p.category 
                             ORDER BY 
                                 CASE 
                                     WHEN co.position IS NOT NULL THEN 1
@@ -387,11 +404,23 @@ def get_products():
                         co.position as category_position
                     FROM products p
                     LEFT JOIN product_metrics pm ON p.sku = pm.sku
-                    LEFT JOIN category_order co ON p.sku = co.sku AND co.category = p.max_Категория
+                    LEFT JOIN category_order co ON p.sku = co.sku AND co.category = p.category
                 )
                 SELECT 
-                    p.*,
-                    pm.*,
+                    p.sku,
+                    p.name,
+                    p.price,
+                    p.oldprice,
+                    p.discount,
+                    p.gender,
+                    p.category,
+                    p.image_url,
+                    pm.sessions,
+                    pm.product_views,
+                    pm.cart_additions,
+                    pm.checkout_starts,
+                    pm.orders_gross,
+                    pm.orders_net,
                     cr.category_position,
                     cr.category_rank,
                     RANK() OVER (ORDER BY 
@@ -450,7 +479,7 @@ def get_categories():
     conn = get_db_connection()
     try:
         categories = conn.execute(
-            'SELECT DISTINCT max_Категория as category FROM products WHERE max_Категория IS NOT NULL AND max_Категория != ?',
+            'SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category != ?',
             ('',)
         ).fetchall()
         return jsonify([dict(category) for category in categories if category['category']])
@@ -470,8 +499,9 @@ def update_weights():
                 checkout_weight,
                 orders_gross_weight,
                 orders_net_weight,
-                discount_penalty
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                discount_penalty,
+                dnp_weight
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             float(weights.get('sessions_weight', 1.0)),
             float(weights.get('views_weight', 1.0)),
@@ -479,7 +509,8 @@ def update_weights():
             float(weights.get('checkout_weight', 1.0)),
             float(weights.get('orders_gross_weight', 1.0)),
             float(weights.get('orders_net_weight', 1.0)),
-            float(weights.get('discount_penalty', 0.0))
+            float(weights.get('discount_penalty', 0.0)),
+            float(weights.get('dnp_weight', 1.0))
         ))
         conn.commit()
         conn.close()
@@ -546,8 +577,9 @@ def reset_weights():
                 checkout_weight,
                 orders_gross_weight,
                 orders_net_weight,
-                discount_penalty
-            ) VALUES (1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0)
+                discount_penalty,
+                dnp_weight
+            ) VALUES (1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 1.0)
         ''')
         
         # Удаляем все ручные позиции
@@ -587,9 +619,9 @@ def export_category(category):
             WITH CategoryRanks AS (
                 SELECT 
                     p.sku,
-                    p.max_Категория,
+                    p.category,
                     RANK() OVER (
-                        PARTITION BY p.max_Категория 
+                        PARTITION BY p.category 
                         ORDER BY 
                             CASE 
                                 WHEN co.position IS NOT NULL THEN 1
@@ -602,8 +634,8 @@ def export_category(category):
                     co.position as category_position
                 FROM products p
                 LEFT JOIN product_metrics pm ON p.sku = pm.sku
-                LEFT JOIN category_order co ON p.sku = co.sku AND co.category = p.max_Категория
-                WHERE p.max_Категория = ?
+                LEFT JOIN category_order co ON p.sku = co.sku AND co.category = p.category
+                WHERE p.category = ?
             )
             SELECT 
                 p.sku,
@@ -611,7 +643,7 @@ def export_category(category):
                 cr.category_rank
             FROM products p 
             LEFT JOIN CategoryRanks cr ON p.sku = cr.sku
-            WHERE p.max_Категория = ?
+            WHERE p.category = ?
             ORDER BY 
                 CASE 
                     WHEN cr.category_position IS NOT NULL THEN 1

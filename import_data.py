@@ -7,39 +7,42 @@ import logging
 def import_excel_data(file_path: str) -> pd.DataFrame:
     try:
         df = pd.read_excel(file_path)
+        # Удаляем дублирующиеся столбцы
+        df = df.loc[:, ~df.columns.duplicated()]
+        print('DEBUG: столбцы после удаления дубликатов:', list(df.columns))
         
         # Маппинг колонок с русского на английский
         column_mapping = {
             'Артикул': 'sku',
+            'Название товара': 'name',
+            'price': 'price',
+            'oldprice': 'oldprice',
+            'discount': 'discount',
+            'gender': 'gender',
+            'max_Категория': 'max_Категория',
+            'image_url': 'image_url',
+            # Метрики
             'Сессии': 'sessions',
             'Карточка товара': 'product_views',
-            'Добавление в корзину': 'add_to_cart',
+            'Добавление в корзину': 'cart_additions',
             'Начало чекаута': 'checkout_starts',
-            'Кол-во товаров': 'quantity',
             'Заказы (gross)': 'orders_gross',
             'Заказы (net)': 'orders_net',
-            'Выручка без НДС': 'revenue_gross',
-            'Выручка без НДС (net)': 'revenue_net',
-            'Название товара': 'product_name',
-            'max_Категория': 'category',
-            'price': 'price',
-            'oldprice': 'old_price',
-            'discount': 'discount',
-            'image_url': 'image_url'
         }
         
         # Переименовываем колонки
         df = df.rename(columns=column_mapping)
         
         # Заполняем пропущенные значения нулями для числовых колонок
-        numeric_columns = ['sessions', 'product_views', 'add_to_cart', 'checkout_starts',
-                         'quantity', 'orders_gross', 'orders_net', 'revenue_gross', 'revenue_net']
-        df[numeric_columns] = df[numeric_columns].fillna(0)
+        numeric_columns = ['sessions', 'product_views', 'cart_additions', 'checkout_starts', 'orders_gross', 'orders_net', 'price', 'oldprice', 'discount']
+        for col in numeric_columns:
+            if col in df.columns:
+                df[col] = df[col].fillna(0)
         
         return df
     except Exception as e:
-        logging.error(f"Error importing Excel data: {str(e)}")
-        raise
+        print(f'Ошибка при импорте Excel: {e}')
+        return pd.DataFrame()
 
 def import_xml_data(file_path: str) -> Dict[str, Any]:
     try:
@@ -65,18 +68,23 @@ def insert_data_to_db(df: pd.DataFrame, xml_data: Dict[str, Any], db_path: str):
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
-        # Создаем таблицы если они не существуют
+        # Создаем таблицу products с нужной структурой
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS products (
             sku TEXT PRIMARY KEY,
             name TEXT,
-            description TEXT,
-            category TEXT,
             price REAL,
-            old_price REAL,
-            discount REAL
+            oldprice REAL,
+            discount REAL,
+            gender TEXT,
+            max_Категория TEXT,
+            image_url TEXT
         )
         ''')
+        
+        # === ОТЛАДКА: выводим строку по артикулу GDR030090-2 ===
+        print('DEBUG: строка из DataFrame по GDR030090-2:')
+        print(df[df['sku'] == 'GDR030090-2'])
         
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS product_metrics (
@@ -85,11 +93,8 @@ def insert_data_to_db(df: pd.DataFrame, xml_data: Dict[str, Any], db_path: str):
             product_views INTEGER,
             add_to_cart INTEGER,
             checkout_starts INTEGER,
-            quantity INTEGER,
             orders_gross INTEGER,
             orders_net INTEGER,
-            revenue_gross REAL,
-            revenue_net REAL,
             FOREIGN KEY (sku) REFERENCES products(sku)
         )
         ''')
@@ -105,37 +110,52 @@ def insert_data_to_db(df: pd.DataFrame, xml_data: Dict[str, Any], db_path: str):
         
         # Вставляем данные в таблицу products
         for _, row in df.iterrows():
-            description = xml_data.get(row['sku'], {}).get('description', '')
+            try:
+                def get_scalar(val):
+                    if isinstance(val, pd.Series):
+                        return val.iloc[0]
+                    return val
+                # Для поля name: если 'name' пустой, использовать 'Название товара'
+                name_val = get_scalar(row['name']) if 'name' in row and pd.notna(get_scalar(row['name'])) else None
+                if not name_val and 'Название товара' in row and pd.notna(get_scalar(row['Название товара'])):
+                    name_val = str(get_scalar(row['Название товара']))
+                values = [
+                    str(get_scalar(row['sku'])) if pd.notna(get_scalar(row['sku'])) else None,
+                    name_val if name_val else None,
+                    float(get_scalar(row['price'])) if pd.notna(get_scalar(row['price'])) else None,
+                    float(get_scalar(row['oldprice'])) if pd.notna(get_scalar(row['oldprice'])) else None,
+                    float(get_scalar(row['discount'])) if pd.notna(get_scalar(row['discount'])) else None,
+                    str(get_scalar(row['gender'])) if pd.notna(get_scalar(row['gender'])) else None,
+                    str(get_scalar(row['max_Категория'])) if pd.notna(get_scalar(row['max_Категория'])) else None,
+                    str(get_scalar(row['image_url'])) if pd.notna(get_scalar(row['image_url'])) else None
+                ]
+                if str(get_scalar(row['sku'])) == 'GDR030090-2':
+                    print('DEBUG: значения всех полей для GDR030090-2:')
+                    for col in row.index:
+                        print(f"{col}: {get_scalar(row[col])}")
+                    print(f"name_val: {name_val}")
+            except KeyError as e:
+                print(f'ОШИБКА: отсутствует столбец {e}')
+                continue
             cursor.execute('''
-            INSERT OR REPLACE INTO products (sku, name, description, category, price, old_price, discount)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                row['sku'],
-                row['product_name'],
-                description,
-                row['category'],
-                row['price'],
-                row['old_price'],
-                row['discount']
-            ))
+            INSERT OR REPLACE INTO products (sku, name, price, oldprice, discount, gender, max_Категория, image_url)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', values)
             
             # Вставляем метрики
             cursor.execute('''
             INSERT OR REPLACE INTO product_metrics 
             (sku, sessions, product_views, add_to_cart, checkout_starts, 
-             quantity, orders_gross, orders_net, revenue_gross, revenue_net)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             orders_gross, orders_net)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ''', (
                 row['sku'],
                 row['sessions'],
                 row['product_views'],
-                row['add_to_cart'],
+                row['cart_additions'],
                 row['checkout_starts'],
-                row['quantity'],
                 row['orders_gross'],
-                row['orders_net'],
-                row['revenue_gross'],
-                row['revenue_net']
+                row['orders_net']
             ))
             
             # Вставляем изображения
@@ -166,7 +186,7 @@ def check_data(db_path: str):
         
         # Проверяем несколько случайных записей
         cursor.execute('''
-        SELECT p.sku, p.name, p.category, m.sessions, m.revenue_net
+        SELECT p.sku, p.name, p.category, m.sessions
         FROM products p
         JOIN product_metrics m ON p.sku = m.sku
         LIMIT 5

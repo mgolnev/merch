@@ -116,6 +116,16 @@
                                step="0.1" min="0" value="{{ weights.discount_penalty }}" required>
                         <small class="form-text text-muted">Штрафной коэффициент за использование скидок</small>
                     </div>
+                    <div class="form-group">
+                        <label for="dnp_weight">Вес даты начала продаж (DNP):</label>
+                        <input type="number" class="form-control" id="dnp_weight" name="dnp_weight" 
+                               step="0.1" min="0" value="{{ weights.dnp_weight }}" required>
+                        <small class="form-text text-muted">
+                            Влияние даты начала продаж на скор. 
+                            Товары с прошедшей датой начала продаж получат штраф к скору, 
+                            который увеличивается со временем.
+                        </small>
+                    </div>
                 </div>
 
                 <div class="d-flex justify-content-between align-items-center">
@@ -140,7 +150,8 @@
                 checkout_weight: parseFloat(document.getElementById('checkout_weight').value),
                 orders_gross_weight: parseFloat(document.getElementById('orders_gross_weight').value),
                 orders_net_weight: parseFloat(document.getElementById('orders_net_weight').value),
-                discount_penalty: parseFloat(document.getElementById('discount_penalty').value)
+                discount_penalty: parseFloat(document.getElementById('discount_penalty').value),
+                dnp_weight: parseFloat(document.getElementById('dnp_weight').value)
             };
 
             try {

@@ -25,9 +25,7 @@ def process_excel_data(file_path):
         'Добавление в корзину': 'add_to_cart',
         'Начало чекаута': 'checkout_starts',
         'Заказы (gross)': 'orders_gross',
-        'Заказы (net)': 'orders_net',
-        'Выручка без НДС': 'revenue_gross',
-        'Выручка без НДС (net)': 'revenue_net'
+        'Заказы (net)': 'orders_net'
     }
     
     df = df[list(columns_to_use.keys())].rename(columns=columns_to_use)
@@ -36,8 +34,7 @@ def process_excel_data(file_path):
     # Группировка по артикулу и суммирование метрик
     metrics_to_sum = [
         'sessions', 'product_views', 'add_to_cart', 
-        'checkout_starts', 'orders_gross', 'orders_net',
-        'revenue_gross', 'revenue_net'
+        'checkout_starts', 'orders_gross', 'orders_net'
     ]
     
     # Для категории берем первое значение при группировке
