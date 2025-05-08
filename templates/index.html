@@ -878,10 +878,13 @@
                             <i class="bi bi-tag"></i> ${product.sku || 'Н/Д'}
                         </div>
                         <div class="category">
-                            <i class="bi bi-folder"></i> ${product.max_Категория || 'Без категории'}
+                            <i class="bi bi-folder"></i> ${product.category || 'Без категории'}
                         </div>
                         <div class="gender">
                             <i class="bi bi-gender-ambiguous"></i> ${product.gender || 'Не указан'}
+                        </div>
+                        <div class="dnp">
+                            <i class="bi bi-calendar-event"></i> Дата начала продаж: ${product.sale_start_date ? product.sale_start_date : '—'}
                         </div>
                         <div class="price-block">
                             <span class="current-price">${currentPrice} ₽</span>

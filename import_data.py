@@ -13,21 +13,22 @@ def import_excel_data(file_path: str) -> pd.DataFrame:
         
         # Маппинг колонок с русского на английский
         column_mapping = {
-            'Артикул': 'sku',
-            'Название товара': 'name',
+            'sku': 'sku',
+            'name': 'name',
+            'category': 'category',
+            'sessions': 'sessions',
+            'product_views': 'product_views',
+            'cart_additions': 'cart_additions',
+            'checkout_starts': 'checkout_starts',
+            'orders_gross': 'orders_gross',
+            'orders_net': 'orders_net',
             'price': 'price',
             'oldprice': 'oldprice',
             'discount': 'discount',
             'gender': 'gender',
-            'max_Категория': 'max_Категория',
             'image_url': 'image_url',
-            # Метрики
-            'Сессии': 'sessions',
-            'Карточка товара': 'product_views',
-            'Добавление в корзину': 'cart_additions',
-            'Начало чекаута': 'checkout_starts',
-            'Заказы (gross)': 'orders_gross',
-            'Заказы (net)': 'orders_net',
+            'sale_start_date': 'sale_start_date',
+            'dnp': 'sale_start_date',
         }
         
         # Переименовываем колонки
@@ -77,8 +78,9 @@ def insert_data_to_db(df: pd.DataFrame, xml_data: Dict[str, Any], db_path: str):
             oldprice REAL,
             discount REAL,
             gender TEXT,
-            max_Категория TEXT,
-            image_url TEXT
+            category TEXT,
+            image_url TEXT,
+            sale_start_date TEXT
         )
         ''')
         
@@ -91,7 +93,7 @@ def insert_data_to_db(df: pd.DataFrame, xml_data: Dict[str, Any], db_path: str):
             sku TEXT PRIMARY KEY,
             sessions INTEGER,
             product_views INTEGER,
-            add_to_cart INTEGER,
+            cart_additions INTEGER,
             checkout_starts INTEGER,
             orders_gross INTEGER,
             orders_net INTEGER,
@@ -119,6 +121,11 @@ def insert_data_to_db(df: pd.DataFrame, xml_data: Dict[str, Any], db_path: str):
                 name_val = get_scalar(row['name']) if 'name' in row and pd.notna(get_scalar(row['name'])) else None
                 if not name_val and 'Название товара' in row and pd.notna(get_scalar(row['Название товара'])):
                     name_val = str(get_scalar(row['Название товара']))
+                sale_start_date_val = None
+                if 'sale_start_date' in row and pd.notna(get_scalar(row['sale_start_date'])):
+                    sale_start_date_val = str(get_scalar(row['sale_start_date']))
+                elif 'dnp' in row and pd.notna(get_scalar(row['dnp'])):
+                    sale_start_date_val = str(get_scalar(row['dnp']))
                 values = [
                     str(get_scalar(row['sku'])) if pd.notna(get_scalar(row['sku'])) else None,
                     name_val if name_val else None,
@@ -126,8 +133,9 @@ def insert_data_to_db(df: pd.DataFrame, xml_data: Dict[str, Any], db_path: str):
                     float(get_scalar(row['oldprice'])) if pd.notna(get_scalar(row['oldprice'])) else None,
                     float(get_scalar(row['discount'])) if pd.notna(get_scalar(row['discount'])) else None,
                     str(get_scalar(row['gender'])) if pd.notna(get_scalar(row['gender'])) else None,
-                    str(get_scalar(row['max_Категория'])) if pd.notna(get_scalar(row['max_Категория'])) else None,
-                    str(get_scalar(row['image_url'])) if pd.notna(get_scalar(row['image_url'])) else None
+                    str(get_scalar(row['category'])) if 'category' in row and pd.notna(get_scalar(row['category'])) else None,
+                    str(get_scalar(row['image_url'])) if pd.notna(get_scalar(row['image_url'])) else None,
+                    sale_start_date_val
                 ]
                 if str(get_scalar(row['sku'])) == 'GDR030090-2':
                     print('DEBUG: значения всех полей для GDR030090-2:')
@@ -138,14 +146,14 @@ def insert_data_to_db(df: pd.DataFrame, xml_data: Dict[str, Any], db_path: str):
                 print(f'ОШИБКА: отсутствует столбец {e}')
                 continue
             cursor.execute('''
-            INSERT OR REPLACE INTO products (sku, name, price, oldprice, discount, gender, max_Категория, image_url)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT OR REPLACE INTO products (sku, name, price, oldprice, discount, gender, category, image_url, sale_start_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', values)
             
             # Вставляем метрики
             cursor.execute('''
             INSERT OR REPLACE INTO product_metrics 
-            (sku, sessions, product_views, add_to_cart, checkout_starts, 
+            (sku, sessions, product_views, cart_additions, checkout_starts, 
              orders_gross, orders_net)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             ''', (

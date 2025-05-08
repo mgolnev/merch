@@ -95,6 +95,22 @@ def process_data(data_path, feed_path, output_path, dnp_path=None):
                 return '01.01.2000'
             return str(val)
         df_grouped['dnp'] = df_grouped['Артикул'].map(get_dnp)
+    # --- Переименование всех столбцов на английский ---
+    column_rename = {
+        'Артикул': 'sku',
+        'Название товара': 'name',
+        'max_Категория': 'category',
+        'Сессии': 'sessions',
+        'Карточка товара': 'product_views',
+        'Добавление в корзину': 'cart_additions',
+        'Начало чекаута': 'checkout_starts',
+        'Заказы (gross)': 'orders_gross',
+        'Заказы (net)': 'orders_net',
+        'Выручка с НДС': 'revenue_vat',
+        'Выручка без НДС (net)': 'revenue_net',
+        'dnp': 'sale_start_date',
+    }
+    df_grouped = df_grouped.rename(columns=column_rename)
     # Сохраняем итоговый файл
     df_grouped.to_excel(output_path, index=False)
     print(f'Файл {output_path} успешно создан!')

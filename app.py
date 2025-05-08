@@ -22,7 +22,8 @@ def init_db():
         discount REAL,
         gender TEXT,
         category TEXT,
-        image_url TEXT
+        image_url TEXT,
+        sale_start_date TEXT
     )
     ''')
     
@@ -112,6 +113,7 @@ class ProductFilters:
     search: str = ''
     gender: str = 'all'
     per_page: int = 20
+    sku: str = ''
 
 class InputValidator:
     """Класс для валидации входных данных"""
@@ -162,13 +164,21 @@ class InputValidator:
                 max_length=100
             )
             
+            # Валидация sku
+            sku = InputValidator.sanitize_string(
+                args.get('sku', ''),
+                'sku',
+                max_length=50
+            )
+            
             return ProductFilters(
                 category=category,
                 page=page,
                 hide_no_price=hide_no_price,
                 search=search,
                 gender=gender,
-                per_page=per_page
+                per_page=per_page,
+                sku=sku
             )
             
         except ValidationError as e:
@@ -259,20 +269,22 @@ class InputValidator:
             raise ValidationError(f"{field_name} должен быть одним из {valid_values}")
 
 class QueryBuilder:
+    """Класс для построения SQL-запросов"""
     def __init__(self):
-        self.conditions: List[str] = []
-        self.parameters: List[Any] = []
-        
-    def add_condition(self, condition: str, value: Any = None) -> None:
-        """Безопасно добавляет условие в WHERE clause"""
-        if value is not None:
-            self.conditions.append(condition)
-            self.parameters.append(value)
-        
+        self.conditions = []
+        self.params = []
+    
+    def add_condition(self, condition: str, param: Any = None):
+        """Добавление условия в WHERE"""
+        self.conditions.append(condition)
+        if param is not None:
+            self.params.append(param)
+    
     def build(self) -> Tuple[str, List[Any]]:
-        """Возвращает готовый WHERE clause и параметры"""
-        where_clause = " AND ".join(self.conditions) if self.conditions else "1=1"
-        return where_clause, self.parameters
+        """Построение WHERE части запроса"""
+        if not self.conditions:
+            return "1=1", self.params
+        return " AND ".join(self.conditions), self.params
 
 app = Flask(__name__)
 
@@ -304,7 +316,16 @@ def calculate_score(product, weights):
         if product.get('sale_start_date'):
             from datetime import datetime, date
             today = date.today()
-            sale_start = datetime.strptime(product['sale_start_date'], '%Y-%m-%d').date()
+            try:
+                # Пробуем сначала формат DD.MM.YYYY
+                sale_start = datetime.strptime(product['sale_start_date'], '%d.%m.%Y').date()
+            except ValueError:
+                try:
+                    # Если не получилось, пробуем формат YYYY-MM-DD
+                    sale_start = datetime.strptime(product['sale_start_date'], '%Y-%m-%d').date()
+                except ValueError:
+                    # Если оба формата не подошли, пропускаем
+                    return score
             
             # Если дата начала продаж в прошлом, применяем штраф
             if sale_start < today:
@@ -382,6 +403,9 @@ def get_products():
                 else:
                     query_builder.add_condition("p.gender = ?", filters.gender)
             
+            if filters.sku:
+                query_builder.add_condition("p.sku = ?", filters.sku)
+            
             where_clause, params = query_builder.build()
             
             # Базовый запрос с WITH для рейтингов категорий
@@ -415,6 +439,7 @@ def get_products():
                     p.gender,
                     p.category,
                     p.image_url,
+                    p.sale_start_date,
                     pm.sessions,
                     pm.product_views,
                     pm.cart_additions,

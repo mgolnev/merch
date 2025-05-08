@@ -17,7 +17,8 @@ def create_database(db_name='merchandise.db'):
         image_url TEXT,
         price DECIMAL(10,2),
         oldprice DECIMAL(10,2),
-        discount DECIMAL(5,2)
+        discount DECIMAL(5,2),
+        sale_start_date TEXT
     )
     ''')
 
@@ -29,7 +30,6 @@ def create_database(db_name='merchandise.db'):
         product_views INTEGER,
         cart_additions INTEGER,
         checkout_starts INTEGER,
-        quantity INTEGER,
         orders_gross INTEGER,
         orders_net INTEGER,
         FOREIGN KEY (sku) REFERENCES products(sku)
@@ -62,6 +62,16 @@ def create_database(db_name='merchandise.db'):
         orders_net_weight,
         discount_penalty
     ) VALUES (1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0)
+    ''')
+
+    # Создаем таблицу category_weights
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS category_weights (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        category TEXT,
+        weight REAL DEFAULT 1.0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
     ''')
 
     conn.commit()
@@ -97,15 +107,14 @@ def import_data(conn, excel_file='processed_data.xlsx'):
             cursor.execute('''
             INSERT OR REPLACE INTO product_metrics (
                 sku, sessions, product_views, cart_additions,
-                checkout_starts, quantity, orders_gross, orders_net
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                checkout_starts, orders_gross, orders_net
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             ''', (
                 row['Артикул'],
                 row.get('Сессии', 0),
                 row.get('Карточка товара', 0),
                 row.get('Добавление в корзину', 0),
                 row.get('Начало чекаута', 0),
-                row.get('Кол-во товаров', 0),
                 row.get('Заказы (gross)', 0),
                 row.get('Заказы (net)', 0)
             ))
