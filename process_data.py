@@ -52,6 +52,7 @@ def process_xml_data(xml_url='https://storage-cdn11.gloria-jeans.ru/catalog/feed
                 category = offer.findtext('category', '')
                 price = float(offer.find('price').text) if offer.find('price') is not None else None
                 oldprice = float(offer.find('oldprice').text) if offer.find('oldprice') is not None else price
+                available = offer.get('available', 'false').lower() == 'true'
                 gender = None
                 for param in offer.findall('param'):
                     if param.get('name') == 'Пол':
@@ -65,16 +66,18 @@ def process_xml_data(xml_url='https://storage-cdn11.gloria-jeans.ru/catalog/feed
                 # Рассчитываем скидку
                 discount = round(((oldprice - price) / oldprice * 100), 2) if oldprice and price and oldprice > price else 0
                 
-                # Сохраняем данные
-                products_data[product_id] = {
-                    'name': name,
-                    'category': category,
-                    'price': price,
-                    'oldprice': oldprice,
-                    'discount': discount,
-                    'gender': gender,
-                    'image_url': image_url
-                }
+                # Сохраняем данные только для доступных товаров
+                if available:
+                    products_data[product_id] = {
+                        'name': name,
+                        'category': category,
+                        'price': price,
+                        'oldprice': oldprice,
+                        'discount': discount,
+                        'gender': gender,
+                        'image_url': image_url,
+                        'available': available
+                    }
         
         print(f"Обработано {len(products_data)} товаров из XML")
         return products_data
@@ -84,7 +87,7 @@ def process_xml_data(xml_url='https://storage-cdn11.gloria-jeans.ru/catalog/feed
         # Создаем пустой словарь для тестирования
         return {}
 
-def merge_and_save_data(excel_df, xml_data, output_file='processed_data.xlsx'):
+def merge_and_save_data(excel_df, xml_data, output_file='processed_data.xlsx', dnp_file='dnp.xlsx'):
     """Объединение данных и сохранение результата"""
     print("Объединение данных...")
     
@@ -99,12 +102,53 @@ def merge_and_save_data(excel_df, xml_data, output_file='processed_data.xlsx'):
     # Объединяем данные
     result_df = pd.merge(excel_df, xml_df, on='Артикул', how='outer')
     
+    # === ДОБАВЛЯЕМ sale_start_date из dnp.xlsx ===
+    try:
+        dnp_df = pd.read_excel(dnp_file)
+        dnp_df.columns = [col.lower() for col in dnp_df.columns]
+        art_col = [c for c in dnp_df.columns if c == 'sku'][0]
+        date_col = [c for c in dnp_df.columns if 'dnp' in c or 'дата' in c][0]
+        dnp_map = dnp_df.set_index(art_col)[date_col].to_dict()
+        def get_dnp(art):
+            val = dnp_map.get(art, None)
+            if not val or str(val).strip() == '-' or pd.isna(val):
+                return ''
+            return str(val)
+        result_df['sale_start_date'] = result_df['Артикул'].map(get_dnp)
+    except Exception as e:
+        print(f'Не удалось добавить sale_start_date из dnp.xlsx: {e}')
+        result_df['sale_start_date'] = ''
+    
     # Заполняем пропущенные значения
     numeric_columns = ['Сессии', 'Карточка товара', 'Добавление в корзину',
                       'Начало чекаута', 'Кол-во товаров', 'Заказы (gross)',
                       'Заказы (net)', 'Выручка без НДС', 'Выручка без НДС (net)']
     result_df[numeric_columns] = result_df[numeric_columns].fillna(0)
     
+    # Заполняем пропущенные значения для available
+    result_df['available'] = result_df['available'].fillna(False)
+    
+    # Фильтруем только доступные товары
+    result_df = result_df[result_df['available'] == True]
+
+    # === Переименование всех колонок на латиницу ===
+    column_rename = {
+        'Артикул': 'sku',
+        'Название товара': 'name',
+        'max_Категория': 'category',
+        'Сессии': 'sessions',
+        'Карточка товара': 'product_views',
+        'Добавление в корзину': 'cart_additions',
+        'Начало чекаута': 'checkout_starts',
+        'Заказы (gross)': 'orders_gross',
+        'Заказы (net)': 'orders_net',
+        'Кол-во товаров': 'quantity',
+        'Выручка без НДС': 'revenue_no_vat',
+        'Выручка без НДС (net)': 'revenue_net',
+        # dnp больше не нужен, теперь есть sale_start_date
+    }
+    result_df = result_df.rename(columns=column_rename)
+
     # Сохраняем результат
     result_df.to_excel(output_file, index=False)
     print(f"Результат сохранен в {output_file}")
@@ -123,4 +167,4 @@ if __name__ == "__main__":
     xml_data = process_xml_data()
     
     # Объединение и сохранение
-    result_df = merge_and_save_data(excel_df, xml_data) 
+    result_df = merge_and_save_data(excel_df, xml_data, dnp_file='dnp.xlsx') 

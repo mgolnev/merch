@@ -208,4 +208,71 @@ def check_data(db_path: str):
         
     except Exception as e:
         logging.error(f"Error checking data: {str(e)}")
-        raise 
+        raise
+
+def import_data():
+    # Подключаемся к базе данных
+    conn = sqlite3.connect('merchandise.db')
+    cursor = conn.cursor()
+    
+    try:
+        # Читаем данные из Excel
+        print("Чтение данных из Excel...")
+        df = pd.read_excel('processed_data.xlsx')
+        
+        # Очищаем существующие данные
+        print("Очистка существующих данных...")
+        cursor.execute('DELETE FROM products')
+        cursor.execute('DELETE FROM product_metrics')
+        
+        # Подготавливаем данные для вставки
+        print("Подготовка данных для вставки...")
+        for _, row in df.iterrows():
+            # Вставляем данные в таблицу products
+            cursor.execute('''
+                INSERT INTO products (
+                    sku, name, price, oldprice, discount, gender, 
+                    category, image_url, sale_start_date, available
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                row['sku'],
+                row['name'],
+                row['price'],
+                row['oldprice'],
+                row['discount'],
+                row['gender'],
+                row['category'],
+                row['image_url'],
+                row.get('sale_start_date', None),
+                row['available']
+            ))
+            
+            # Вставляем данные в таблицу product_metrics
+            cursor.execute('''
+                INSERT INTO product_metrics (
+                    sku, sessions, product_views, cart_additions,
+                    checkout_starts, orders_gross, orders_net
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                row['sku'],
+                row['sessions'],
+                row['product_views'],
+                row['cart_additions'],
+                row['checkout_starts'],
+                row['orders_gross'],
+                row['orders_net']
+            ))
+        
+        # Сохраняем изменения
+        conn.commit()
+        print("Данные успешно импортированы!")
+        
+    except Exception as e:
+        print(f"Ошибка при импорте данных: {str(e)}")
+        conn.rollback()
+    
+    finally:
+        conn.close()
+
+if __name__ == "__main__":
+    import_data() 

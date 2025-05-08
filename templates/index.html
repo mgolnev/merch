@@ -537,6 +537,23 @@
                 padding: 0.5rem 0.2rem;
             }
         }
+        .dnp {
+            font-size: 0.9rem;
+            color: #6c757d;
+            margin-bottom: 0.5rem;
+        }
+
+        .availability {
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .availability i {
+            font-size: 1.1rem;
+        }
     </style>
 </head>
 <body>
@@ -883,8 +900,10 @@
                         <div class="gender">
                             <i class="bi bi-gender-ambiguous"></i> ${product.gender || 'Не указан'}
                         </div>
-                        <div class="dnp">
-                            <i class="bi bi-calendar-event"></i> Дата начала продаж: ${product.sale_start_date ? product.sale_start_date : '—'}
+                        ${product.sale_start_date ? `<div class="sale-start-date">${product.sale_start_date}</div>` : ''}
+                        <div class="availability">
+                            <i class="bi bi-${product.available ? 'check-circle-fill text-success' : 'x-circle-fill text-danger'}"></i> 
+                            ${product.available ? 'В наличии' : 'Скоро в продаже'}
                         </div>
                         <div class="price-block">
                             <span class="current-price">${currentPrice} ₽</span>

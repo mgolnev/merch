@@ -23,7 +23,8 @@ def init_db():
         gender TEXT,
         category TEXT,
         image_url TEXT,
-        sale_start_date TEXT
+        sale_start_date TEXT,
+        available BOOLEAN DEFAULT 0
     )
     ''')
     
@@ -312,7 +313,7 @@ def calculate_score(product, weights):
         if product.get('orders_net'):
             score *= (1 + (weights['orders_net_weight'] - 1) * (product['orders_net'] / 5))
         
-        # Применяем вес DNP только для товаров с прошедшей датой начала продаж
+        # Применяем вес DNP для товаров с датой начала продаж
         if product.get('sale_start_date'):
             from datetime import datetime, date
             today = date.today()
@@ -330,9 +331,15 @@ def calculate_score(product, weights):
             # Если дата начала продаж в прошлом, применяем штраф
             if sale_start < today:
                 days_since_sale = (today - sale_start).days
-                # Штраф увеличивается с течением времени, но имеет асимптоту
-                penalty = 1 / (1 + days_since_sale)
-                score *= (1 - (weights['dnp_weight'] - 1) * penalty)
+                # Штраф увеличивается с течением времени
+                penalty = min(1.0, days_since_sale / 365)  # Максимальный штраф через год
+                score *= (1 - penalty * weights['dnp_weight'])
+            # Если дата начала продаж в будущем, но товар уже продается - даем поощрение
+            elif sale_start > today and product.get('available', False):
+                days_until_sale = (sale_start - today).days
+                # Поощрение увеличивается с удаленностью от официальной даты
+                bonus = min(0.5, days_until_sale / 365)  # Максимальное поощрение 50%
+                score *= (1 + bonus * weights['dnp_weight'])
         
         # Применяем штраф за скидку
         if product.get('discount') and weights['discount_penalty']:
@@ -440,6 +447,7 @@ def get_products():
                     p.category,
                     p.image_url,
                     p.sale_start_date,
+                    p.available,
                     pm.sessions,
                     pm.product_views,
                     pm.cart_additions,
