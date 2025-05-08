@@ -231,20 +231,20 @@ def import_data():
             # Вставляем данные в таблицу products
             cursor.execute('''
                 INSERT INTO products (
-                    sku, name, price, oldprice, discount, gender, 
-                    category, image_url, sale_start_date, available
+                    sku, name, categories, price, oldprice, discount, gender, 
+                    image_url, sale_start_date, available
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 row['sku'],
                 row['name'],
+                row['categories'],  # Используем новую колонку categories
                 row['price'],
                 row['oldprice'],
                 row['discount'],
                 row['gender'],
-                row['category'],
                 row['image_url'],
                 row.get('sale_start_date', None),
-                row['available']
+                row.get('available', True)
             ))
             
             # Вставляем данные в таблицу product_metrics
@@ -263,14 +263,12 @@ def import_data():
                 row['orders_net']
             ))
         
-        # Сохраняем изменения
         conn.commit()
-        print("Данные успешно импортированы!")
+        print("Данные успешно импортированы в базу данных")
         
     except Exception as e:
         print(f"Ошибка при импорте данных: {str(e)}")
-        conn.rollback()
-    
+        raise
     finally:
         conn.close()
 

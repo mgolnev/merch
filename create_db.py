@@ -11,14 +11,15 @@ def create_database(db_name='merchandise.db'):
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS products (
         sku TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        category TEXT,
+        name TEXT,
+        categories TEXT,  -- Хранит все категории через |
         gender TEXT,
         image_url TEXT,
-        price DECIMAL(10,2),
-        oldprice DECIMAL(10,2),
-        discount DECIMAL(5,2),
-        sale_start_date TEXT
+        price REAL,
+        oldprice REAL,
+        discount REAL,
+        sale_start_date TEXT,
+        available BOOLEAN DEFAULT 1
     )
     ''')
 
@@ -26,12 +27,12 @@ def create_database(db_name='merchandise.db'):
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS product_metrics (
         sku TEXT PRIMARY KEY,
-        sessions INTEGER,
-        product_views INTEGER,
-        cart_additions INTEGER,
-        checkout_starts INTEGER,
-        orders_gross INTEGER,
-        orders_net INTEGER,
+        sessions INTEGER DEFAULT 0,
+        product_views INTEGER DEFAULT 0,
+        cart_additions INTEGER DEFAULT 0,
+        checkout_starts INTEGER DEFAULT 0,
+        orders_gross INTEGER DEFAULT 0,
+        orders_net INTEGER DEFAULT 0,
         FOREIGN KEY (sku) REFERENCES products(sku)
     )
     ''')
@@ -89,7 +90,7 @@ def import_data(conn, excel_file='processed_data.xlsx'):
         try:
             cursor.execute('''
             INSERT OR REPLACE INTO products (
-                sku, name, category, gender, image_url,
+                sku, name, categories, gender, image_url,
                 price, oldprice, discount
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (

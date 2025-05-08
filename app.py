@@ -6,6 +6,7 @@ import io
 from typing import List, Tuple, Any, Optional, Dict, Union
 from dataclasses import dataclass
 from enum import Enum
+from datetime import datetime, date
 
 def init_db():
     """Инициализация базы данных"""
@@ -123,106 +124,55 @@ class InputValidator:
     ALLOWED_PER_PAGE = [20, 50, 100, 200, 500]
     
     @staticmethod
-    def validate_product_filters(args: Dict[str, Any]) -> ProductFilters:
-        """Валидация фильтров для продуктов"""
+    def validate_product_filters(args):
         try:
-            # Валидация page
-            page = InputValidator.validate_integer(
-                args.get('page', 1),
-                'page',
-                min_value=1,
-                max_value=1000
-            )
+            page = args.get('page', '1')
+            if page == 'all':
+                page = 1
+            else:
+                page = int(page)
+                if page < 1:
+                    raise ValidationError("page должен быть положительным числом")
             
-            # Валидация per_page
-            per_page = InputValidator.validate_integer(
-                args.get('per_page', 20),
-                'per_page',
-                allowed_values=InputValidator.ALLOWED_PER_PAGE
-            )
+            per_page = int(args.get('per_page', '20'))
+            if per_page < 1:
+                raise ValidationError("per_page должен быть положительным числом")
             
-            # Валидация hide_no_price
-            hide_no_price = str(args.get('hide_no_price', 'true')).lower() == 'true'
+            hide_no_price = args.get('hide_no_price', 'true').lower() == 'true'
+            search = args.get('search', '')
+            gender = args.get('gender', 'all')
+            category = args.get('category', 'all')
+            sku = args.get('sku', '')
             
-            # Валидация search
-            search = InputValidator.sanitize_string(
-                args.get('search', ''),
-                'search',
-                max_length=InputValidator.MAX_SEARCH_LENGTH
-            )
-            
-            # Валидация gender
-            gender = InputValidator.validate_enum(
-                args.get('gender', 'all'),
-                'gender',
-                Gender
-            )
-            
-            # Валидация category
-            category = InputValidator.sanitize_string(
-                args.get('category', 'all'),
-                'category',
-                max_length=100
-            )
-            
-            # Валидация sku
-            sku = InputValidator.sanitize_string(
-                args.get('sku', ''),
-                'sku',
-                max_length=50
-            )
-            
-            return ProductFilters(
-                category=category,
-                page=page,
-                hide_no_price=hide_no_price,
-                search=search,
-                gender=gender,
-                per_page=per_page,
-                sku=sku
-            )
-            
-        except ValidationError as e:
+            return type('Filters', (), {
+                'page': page,
+                'per_page': per_page,
+                'hide_no_price': hide_no_price,
+                'search': search,
+                'gender': gender,
+                'category': category,
+                'sku': sku
+            })
+        except ValueError as e:
             raise ValidationError(f"Ошибка валидации фильтров: {str(e)}")
     
     @staticmethod
-    def validate_category_order(data: Dict[str, Any]) -> Dict[str, Any]:
-        """Валидация данных для обновления порядка категорий"""
-        try:
-            if not isinstance(data, dict):
-                raise ValidationError("Неверный формат данных")
-                
-            required_fields = ['sku', 'category', 'position']
-            for field in required_fields:
-                if field not in data:
-                    raise ValidationError(f"Отсутствует обязательное поле: {field}")
-            
-            # Валидация SKU
-            sku = InputValidator.sanitize_string(data['sku'], 'sku', max_length=50)
-            
-            # Валидация category
-            category = InputValidator.sanitize_string(data['category'], 'category', max_length=100)
-            
-            # Валидация position
-            position = InputValidator.validate_integer(data['position'], 'position', min_value=1)
-            
-            return {
-                'sku': sku,
-                'category': category,
-                'position': position
-            }
-            
-        except ValidationError as e:
-            raise ValidationError(f"Ошибка валидации order данных: {str(e)}")
+    def validate_category_order(data):
+        if not isinstance(data, dict):
+            raise ValidationError("Данные должны быть объектом")
+        
+        required_fields = ['sku', 'category_id', 'position']
+        for field in required_fields:
+            if field not in data:
+                raise ValidationError(f"Отсутствует обязательное поле: {field}")
+        
+        if not isinstance(data['position'], int) or data['position'] < 0:
+            raise ValidationError("position должен быть неотрицательным целым числом")
+        
+        return data
     
     @staticmethod
-    def validate_integer(
-        value: Union[str, int],
-        field_name: str,
-        min_value: Optional[int] = None,
-        max_value: Optional[int] = None,
-        allowed_values: Optional[List[int]] = None
-    ) -> int:
+    def validate_integer(value: Union[str, int], field_name: str, min_value: Optional[int] = None, max_value: Optional[int] = None, allowed_values: Optional[List[int]] = None) -> int:
         """Валидация целочисленных значений"""
         try:
             # Если значение 'all', возвращаем 1
@@ -273,6 +223,18 @@ class InputValidator:
             valid_values = [e.value for e in enum_class]
             raise ValidationError(f"{field_name} должен быть одним из {valid_values}")
 
+    @staticmethod
+    def validate_category_name(name: str) -> str:
+        """Валидация имени категории"""
+        if not name:
+            raise ValidationError("Имя категории не может быть пустым")
+        
+        name = name.strip()
+        if len(name) > 100:
+            raise ValidationError("Имя категории не может быть длиннее 100 символов")
+        
+        return name
+
 class QueryBuilder:
     """Класс для построения SQL-запросов"""
     def __init__(self):
@@ -319,41 +281,38 @@ def calculate_score(product, weights):
         
         # Применяем вес DNP для товаров с датой начала продаж
         sale_start_date = product.get('sale_start_date')
-        if sale_start_date is None:
-            sale_start_date = '01.01.2000'  # Используем дату по умолчанию
-            
-        from datetime import datetime, date
-        today = date.today()
-        try:
-            # Пробуем сначала формат DD.MM.YYYY
-            sale_start = datetime.strptime(sale_start_date, '%d.%m.%Y').date()
-        except ValueError:
+        if sale_start_date and isinstance(sale_start_date, str):
             try:
-                # Если не получилось, пробуем формат YYYY-MM-DD
-                sale_start = datetime.strptime(sale_start_date, '%Y-%m-%d').date()
+                # Пробуем сначала формат DD.MM.YYYY
+                sale_start = datetime.strptime(sale_start_date, '%d.%m.%Y').date()
             except ValueError:
-                # Если оба формата не подошли, используем дату по умолчанию
-                sale_start = datetime.strptime('01.01.2000', '%d.%m.%Y').date()
-        
-        # Если дата начала продаж в прошлом, применяем штраф
-        if sale_start < today:
-            days_since_sale = (today - sale_start).days
-            # Штраф увеличивается с течением времени
-            penalty = min(1.0, days_since_sale / 365)  # Максимальный штраф через год
-            score *= (1 - penalty * weights['dnp_weight'])
-        # Если дата начала продаж в будущем, но товар уже продается - даем поощрение
-        elif sale_start > today and product.get('available', False):
-            days_until_sale = (sale_start - today).days
-            # Поощрение увеличивается с удаленностью от официальной даты
-            bonus = min(0.5, days_until_sale / 365)  # Максимальное поощрение 50%
-            score *= (1 + bonus * weights['dnp_weight'])
+                try:
+                    # Если не получилось, пробуем формат YYYY-MM-DD
+                    sale_start = datetime.strptime(sale_start_date, '%Y-%m-%d').date()
+                except ValueError:
+                    # Если оба формата не подошли, пропускаем
+                    sale_start = None
+            
+            if sale_start:
+                today = date.today()
+                # Если дата начала продаж в прошлом, применяем штраф
+                if sale_start < today:
+                    days_since_sale = (today - sale_start).days
+                    # Штраф увеличивается с течением времени, но не более 50%
+                    penalty = min(0.5, days_since_sale / 365)  # Максимальный штраф 50%
+                    score *= (1 - penalty * weights['dnp_weight'])
+                # Если дата начала продаж в будущем, но товар уже продается - даем поощрение
+                elif sale_start > today and product.get('available', False):
+                    days_until_sale = (sale_start - today).days
+                    # Поощрение увеличивается с удаленностью от официальной даты
+                    bonus = min(0.5, days_until_sale / 365)  # Максимальное поощрение 50%
+                    score *= (1 + bonus * weights['dnp_weight'])
         
         # Применяем штраф за скидку
         if product.get('discount') and weights['discount_penalty']:
-            # Штраф увеличивается с ростом скидки и веса штрафа
-            penalty = (product['discount'] / 100) * weights['discount_penalty']
-            # Ограничиваем штраф, чтобы скор не становился отрицательным
-            score *= max(0.01, 1 - penalty)
+            # Штраф увеличивается с ростом скидки и веса штрафа, но не более 50%
+            penalty = min(0.5, (product['discount'] / 100) * weights['discount_penalty'])
+            score *= (1 - penalty)
     
     return round(score, 2)
 
@@ -396,57 +355,54 @@ def weights_page():
 
 @app.route('/api/products')
 def get_products():
+    """Получение списка товаров с фильтрацией"""
     try:
-        # Валидация входных данных
-        filters = InputValidator.validate_product_filters(request.args)
+        # Получаем параметры фильтрации
+        category = request.args.get('category', 'all')
+        page = request.args.get('page', '1')
+        hide_no_price = request.args.get('hide_no_price', 'true').lower() == 'true'
+        search = request.args.get('search', '')
+        gender = request.args.get('gender', 'all')
+        per_page = int(request.args.get('per_page', 20))
         
+        # Валидация параметров
+        if page == 'all':
+            page = 1
+        elif not page.isdigit():
+            raise ValueError("page должен быть целым числом")
+        else:
+            page = int(page)
+        
+        # Подключаемся к базе данных
         conn = get_db_connection()
-        try:
-            query_builder = QueryBuilder()
-            
-            # Используем валидированные данные
-            if filters.category != 'all':
-                query_builder.add_condition("p.category = ?", filters.category)
-            
-            if filters.hide_no_price:
-                query_builder.add_condition("p.price > 0")
-            
-            if filters.search:
-                query_builder.add_condition("p.sku LIKE ?", f"%{filters.search}%")
-            
-            if filters.gender != 'all':
-                if filters.gender == 'empty':
-                    query_builder.add_condition("(p.gender IS NULL OR p.gender = '')")
-                else:
-                    query_builder.add_condition("p.gender = ?", filters.gender)
-            
-            if filters.sku:
-                query_builder.add_condition("p.sku = ?", filters.sku)
-            
-            where_clause, params = query_builder.build()
-            
-            # Базовый запрос с WITH для рейтингов категорий
-            base_query = f"""
-                WITH CategoryRanks AS (
-                    SELECT 
-                        p.sku,
-                        p.category,
-                        RANK() OVER (
-                            PARTITION BY p.category 
-                            ORDER BY 
-                                CASE 
-                                    WHEN co.position IS NOT NULL THEN 1
-                                    ELSE 2
-                                END,
-                                co.position,
-                                -pm.sessions DESC,
-                                -pm.product_views DESC
-                        ) as category_rank,
-                        co.position as category_position
-                    FROM products p
-                    LEFT JOIN product_metrics pm ON p.sku = pm.sku
-                    LEFT JOIN category_order co ON p.sku = co.sku AND co.category = p.category
-                )
+        cursor = conn.cursor()
+        
+        # Получаем текущие веса
+        cursor.execute('SELECT * FROM weights ORDER BY id DESC LIMIT 1')
+        weights = cursor.fetchone()
+        
+        # --- Считаем total_count отдельным простым запросом ---
+        count_query = 'SELECT COUNT(*) FROM products WHERE 1=1'
+        count_params = []
+        if category != 'all':
+            count_query += ' AND category = ?'
+            count_params.append(category)
+        if hide_no_price:
+            count_query += ' AND price > 0'
+        if search:
+            count_query += ' AND (sku LIKE ? OR name LIKE ?)'
+            search_param = f'%{search}%'
+            count_params.extend([search_param, search_param])
+        if gender != 'all':
+            count_query += ' AND gender = ?'
+            count_params.append(gender)
+        cursor.execute(count_query, count_params)
+        total_count = cursor.fetchone()[0]
+        # --- Конец блока подсчёта ---
+        
+        # Формируем основной запрос с сортировкой и пагинацией
+        query = '''
+            WITH ProductScores AS (
                 SELECT 
                     p.sku,
                     p.name,
@@ -458,87 +414,207 @@ def get_products():
                     p.image_url,
                     p.sale_start_date,
                     p.available,
-                    pm.sessions,
-                    pm.product_views,
-                    pm.cart_additions,
-                    pm.checkout_starts,
-                    pm.orders_gross,
-                    pm.orders_net,
-                    cr.category_position,
-                    cr.category_rank,
-                    RANK() OVER (ORDER BY 
-                        COALESCE(pm.sessions, 0) DESC,
-                        COALESCE(pm.product_views, 0) DESC
-                    ) as global_rank
+                    COALESCE(pm.sessions, 0) as sessions,
+                    COALESCE(pm.product_views, 0) as product_views,
+                    COALESCE(pm.cart_additions, 0) as cart_additions,
+                    COALESCE(pm.checkout_starts, 0) as checkout_starts,
+                    COALESCE(pm.orders_gross, 0) as orders_gross,
+                    COALESCE(pm.orders_net, 0) as orders_net,
+                    CASE 
+                        WHEN pc.position IS NOT NULL THEN 1
+                        ELSE 2
+                    END as has_position,
+                    COALESCE(pc.position, 999999) as position
                 FROM products p 
-                LEFT JOIN product_metrics pm ON p.sku = pm.sku
-                LEFT JOIN CategoryRanks cr ON p.sku = cr.sku
-                WHERE {where_clause}
-            """
-            
-            products = conn.execute(base_query, params).fetchall()
-            
-            # Получаем веса для расчета скоринга через параметризованный запрос
-            weights = conn.execute("SELECT * FROM weights ORDER BY id DESC LIMIT 1").fetchone()
-            
-            products_list = []
-            for product in products:
-                product_dict = dict(product)
-                product_dict['score'] = calculate_score(product_dict, weights)
-                products_list.append(product_dict)
-            
-            # Сортировка без SQL-инъекций (перенесена в Python)
-            if filters.category != 'all':
-                products_list.sort(
-                    key=lambda x: (
-                        0 if x['category_position'] is not None else 1,
-                        x['category_position'] if x['category_position'] is not None else float('inf'),
-                        -x['score']
-                    )
+                LEFT JOIN product_metrics pm ON p.sku = pm.sku 
+                LEFT JOIN product_categories pc ON p.sku = pc.sku AND pc.category_id = (
+                    SELECT id FROM feed_categories WHERE name = p.category LIMIT 1
                 )
-            else:
-                products_list.sort(key=lambda x: -x['score'])
-            
-            # Если page=all, возвращаем только информацию о страницах
-            if request.args.get('page') == 'all':
-                total_products = len(products_list)
-                total_pages = (total_products + filters.per_page - 1) // filters.per_page
-                return jsonify({
-                    'products': [],
-                    'total_pages': total_pages,
-                    'current_page': 1,
-                    'total_products': total_products
-                })
-            
-            # Иначе применяем пагинацию
-            offset = (filters.page - 1) * filters.per_page
-            total_products = len(products_list)
-            total_pages = (total_products + filters.per_page - 1) // filters.per_page
-            paginated_products = products_list[offset:offset + filters.per_page]
-            
-            return jsonify({
-                'products': paginated_products,
-                'total_pages': total_pages,
-                'current_page': filters.page,
-                'total_products': total_products
-            })
-            
-        finally:
-            conn.close()
-            
+                WHERE 1=1
+        '''
+        params = []
+        if category != 'all':
+            query += ' AND p.category = ?'
+            params.append(category)
+        if hide_no_price:
+            query += ' AND p.price > 0'
+        if search:
+            query += ' AND (p.sku LIKE ? OR p.name LIKE ?)'
+            search_param = f'%{search}%'
+            params.extend([search_param, search_param])
+        if gender != 'all':
+            query += ' AND p.gender = ?'
+            params.append(gender)
+        query += '''
+            )
+            SELECT * FROM ProductScores
+        '''
+        # --- Сортировка ---
+        if category == 'all':
+            # Без сортировки и лимита в SQL
+            cursor.execute(query, params)
+            products = cursor.fetchall()
+            result = []
+            for product in products:
+                product_dict = {
+                    'sku': product['sku'],
+                    'name': product['name'],
+                    'price': product['price'],
+                    'oldprice': product['oldprice'],
+                    'discount': product['discount'],
+                    'gender': product['gender'],
+                    'category': product['category'],
+                    'image_url': product['image_url'],
+                    'sale_start_date': product['sale_start_date'],
+                    'available': bool(product['available']),
+                    'sessions': product['sessions'],
+                    'product_views': product['product_views'],
+                    'cart_additions': product['cart_additions'],
+                    'checkout_starts': product['checkout_starts'],
+                    'orders_gross': product['orders_gross'],
+                    'orders_net': product['orders_net'],
+                    'categories': [product['category']] if product['category'] else []
+                }
+                product_dict['score'] = calculate_score(product_dict, weights)
+                result.append(product_dict)
+            result.sort(key=lambda x: x['score'], reverse=True)
+            start = (page - 1) * per_page
+            end = start + per_page
+            result = result[start:end]
+        else:
+            # Получаем все товары для выбранной категории (без LIMIT)
+            cursor.execute(query, params)
+            products = cursor.fetchall()
+            with_position = []
+            without_position = []
+            for product in products:
+                product_dict = {
+                    'sku': product['sku'],
+                    'name': product['name'],
+                    'price': product['price'],
+                    'oldprice': product['oldprice'],
+                    'discount': product['discount'],
+                    'gender': product['gender'],
+                    'category': product['category'],
+                    'image_url': product['image_url'],
+                    'sale_start_date': product['sale_start_date'],
+                    'available': bool(product['available']),
+                    'sessions': product['sessions'],
+                    'product_views': product['product_views'],
+                    'cart_additions': product['cart_additions'],
+                    'checkout_starts': product['checkout_starts'],
+                    'orders_gross': product['orders_gross'],
+                    'orders_net': product['orders_net'],
+                    'categories': [product['category']] if product['category'] else [],
+                    'has_position': product['has_position'],
+                    'position': product['position']
+                }
+                product_dict['score'] = calculate_score(product_dict, weights)
+                if product['has_position'] == 1:
+                    with_position.append(product_dict)
+                else:
+                    without_position.append(product_dict)
+            # Сортируем с позицией по position, без позиции — по скору
+            with_position.sort(key=lambda x: (x['position'] if x['position'] is not None else 999999))
+            without_position.sort(key=lambda x: x['score'], reverse=True)
+            result = with_position + without_position
+            # Пагинация в Python
+            start = (page - 1) * per_page
+            end = start + per_page
+            result = result[start:end]
+        conn.close()
+        response = {
+            'products': result,
+            'total': total_count,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': (total_count + per_page - 1) // per_page
+        }
+        return jsonify(response)
+    except ValueError as e:
+        return jsonify({'error': f'Ошибка валидации фильтров: {str(e)}'}), 500
     except Exception as e:
-        print(f"Error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/categories')
 def get_categories():
+    """Получение списка всех категорий"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        # Получаем id и name всех категорий
+        cursor.execute('''
+            SELECT id, name 
+            FROM feed_categories 
+            WHERE is_active = 1
+            ORDER BY name
+        ''')
+        categories_list = [{'id': row[0], 'name': row[1]} for row in cursor.fetchall()]
+        conn.close()
+        return jsonify(categories_list)
+    except Exception as e:
+        if conn:
+            conn.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/categories/<int:category_number>')
+def get_category(category_number):
     conn = get_db_connection()
     try:
-        categories = conn.execute(
-            'SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category != ?',
-            ('',)
-        ).fetchall()
-        return jsonify([dict(category) for category in categories if category['category']])
+        # Получаем информацию о категории
+        category = conn.execute('''
+            SELECT 
+                c.id,
+                c.category_number,
+                c.name,
+                c.parent_id,
+                c.is_active,
+                c.created_at,
+                p.name as parent_name,
+                p.category_number as parent_number,
+                COUNT(pc.sku) as product_count
+            FROM feed_categories c
+            LEFT JOIN feed_categories p ON c.parent_id = p.id
+            LEFT JOIN product_categories pc ON c.id = pc.category_id
+            WHERE c.category_number = ?
+            GROUP BY c.id
+        ''', (category_number,)).fetchone()
+        
+        if not category:
+            return jsonify({'error': 'Категория не найдена'}), 404
+        
+        # Получаем дочерние категории
+        children = conn.execute('''
+            SELECT 
+                id,
+                category_number,
+                name,
+                is_active,
+                (SELECT COUNT(*) FROM product_categories WHERE category_id = feed_categories.id) as product_count
+            FROM feed_categories
+            WHERE parent_id = ?
+            ORDER BY category_number
+        ''', (category['id'],)).fetchall()
+        
+        return jsonify({
+            'id': category['id'],
+            'category_number': category['category_number'],
+            'name': category['name'],
+            'is_active': bool(category['is_active']),
+            'parent': {
+                'id': category['parent_id'],
+                'name': category['parent_name'],
+                'category_number': category['parent_number']
+            } if category['parent_id'] else None,
+            'product_count': category['product_count'],
+            'children': [{
+                'id': child['id'],
+                'category_number': child['category_number'],
+                'name': child['name'],
+                'is_active': bool(child['is_active']),
+                'product_count': child['product_count']
+            } for child in children]
+        })
     finally:
         conn.close()
 
@@ -606,10 +682,34 @@ def update_category_order():
         
         conn = get_db_connection()
         try:
-            conn.execute(
-                'INSERT OR REPLACE INTO category_order (sku, category, position) VALUES (?, ?, ?)',
-                (validated_data['sku'], validated_data['category'], validated_data['position'])
-            )
+            # Проверяем существование категории
+            category = conn.execute(
+                'SELECT id FROM feed_categories WHERE id = ?',
+                (validated_data['category_id'],)
+            ).fetchone()
+            
+            if not category:
+                return jsonify({'error': 'Категория не найдена'}), 404
+            
+            # Проверяем существование товара
+            product = conn.execute(
+                'SELECT sku FROM products WHERE sku = ?',
+                (validated_data['sku'],)
+            ).fetchone()
+            
+            if not product:
+                return jsonify({'error': 'Товар не найден'}), 404
+            
+            # Обновляем позицию товара в категории
+            conn.execute('''
+                INSERT OR REPLACE INTO product_categories (sku, category_id, position)
+                VALUES (?, ?, ?)
+            ''', (
+                validated_data['sku'],
+                validated_data['category_id'],
+                validated_data['position']
+            ))
+            
             conn.commit()
             return jsonify({'status': 'success'})
         finally:
@@ -651,14 +751,18 @@ def reset_weights():
 @app.route('/api/reset_category_order', methods=['POST'])
 def reset_category_order():
     data = request.json
-    category = data.get('category')
-    
-    if not category:
+    category_name = data.get('category')
+    if not category_name:
         return jsonify({'status': 'error', 'message': 'Не указана категория'}), 400
-    
     conn = get_db_connection()
     try:
-        conn.execute('DELETE FROM category_order WHERE category = ?', (category,))
+        # Получаем id категории по имени
+        category = conn.execute('SELECT id FROM feed_categories WHERE name = ?', (category_name,)).fetchone()
+        if not category:
+            return jsonify({'status': 'error', 'message': 'Категория не найдена'}), 404
+        category_id = category['id']
+        # Удаляем все позиции из product_categories для этой категории
+        conn.execute('DELETE FROM product_categories WHERE category_id = ?', (category_id,))
         conn.commit()
         return jsonify({'status': 'success'})
     except Exception as e:
@@ -666,75 +770,175 @@ def reset_category_order():
     finally:
         conn.close()
 
-@app.route('/api/export_category/<category>')
-def export_category(category):
+@app.route('/api/export_category/<int:category_number>')
+def export_category(category_number):
     conn = get_db_connection()
     try:
+        # Получаем ID категории
+        category = conn.execute(
+            'SELECT id, name FROM feed_categories WHERE category_number = ?',
+            (category_number,)
+        ).fetchone()
+        
+        if not category:
+            return jsonify({'error': 'Категория не найдена'}), 404
+        
         # Получаем данные о позициях товаров в категории
         query = """
-            WITH CategoryRanks AS (
-                SELECT 
-                    p.sku,
-                    p.category,
-                    RANK() OVER (
-                        PARTITION BY p.category 
-                        ORDER BY 
-                            CASE 
-                                WHEN co.position IS NOT NULL THEN 1
-                                ELSE 2
-                            END,
-                            co.position,
-                            -pm.sessions DESC,
-                            -pm.product_views DESC
-                    ) as category_rank,
-                    co.position as category_position
-                FROM products p
-                LEFT JOIN product_metrics pm ON p.sku = pm.sku
-                LEFT JOIN category_order co ON p.sku = co.sku AND co.category = p.category
-                WHERE p.category = ?
-            )
             SELECT 
                 p.sku,
-                cr.category_position,
-                cr.category_rank
+                pc.category_id,
+                pc.position
             FROM products p 
-            LEFT JOIN CategoryRanks cr ON p.sku = cr.sku
-            WHERE p.category = ?
+            JOIN product_categories pc ON p.sku = pc.sku
+            WHERE pc.category_id = ?
             ORDER BY 
-                CASE 
-                    WHEN cr.category_position IS NOT NULL THEN 1
-                    ELSE 2
-                END,
-                cr.category_position,
-                cr.category_rank
+                CASE WHEN pc.position IS NOT NULL THEN 1 ELSE 2 END,
+                pc.position
         """
-        
-        products = conn.execute(query, (category, category)).fetchall()
+        products = conn.execute(query, (category['id'],)).fetchall()
         
         # Создаем CSV в памяти
         output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(['Артикул', 'Позиция в категории'])
-        
+        writer = csv.writer(output, delimiter=';')
+        writer.writerow(['sku', 'category_id', 'position'])
         for product in products:
             writer.writerow([
                 product['sku'],
-                product['category_position'] if product['category_position'] is not None else product['category_rank']
+                product['category_id'],
+                product['position'] if product['position'] is not None else ''
             ])
-        
-        # Подготавливаем файл для отправки
         output.seek(0)
         return send_file(
             io.BytesIO(output.getvalue().encode('utf-8')),
             mimetype='text/csv',
             as_attachment=True,
-            download_name=f'{category}_positions.csv'
+            download_name=f'{category["name"]}_positions.csv'
         )
-        
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
         conn.close()
+
+@app.route('/api/import_category/<int:category_number>', methods=['POST'])
+def import_category(category_number):
+    if 'file' not in request.files:
+        return jsonify({'error': 'Файл не найден'}), 400
+        
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'Файл не выбран'}), 400
+        
+    if not file.filename.endswith('.csv'):
+        return jsonify({'error': 'Поддерживаются только CSV файлы'}), 400
+    
+    conn = get_db_connection()
+    try:
+        # Получаем ID категории
+        category = conn.execute(
+            'SELECT id FROM feed_categories WHERE category_number = ?',
+            (category_number,)
+        ).fetchone()
+        
+        if not category:
+            return jsonify({'error': 'Категория не найдена'}), 404
+        
+        # Читаем CSV файл
+        stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
+        csv_input = csv.DictReader(stream)
+        
+        # Подготавливаем данные для вставки
+        positions = []
+        for row in csv_input:
+            try:
+                sku = row['Артикул']
+                position = int(row['Позиция в категории'])
+                if position < 0:
+                    raise ValueError("Позиция не может быть отрицательной")
+                positions.append((sku, category['id'], position))
+            except (KeyError, ValueError) as e:
+                return jsonify({'error': f'Ошибка в строке {csv_input.line_num}: {str(e)}'}), 400
+        
+        # Проверяем существование всех SKU
+        skus = [p[0] for p in positions]
+        existing_skus = set(row[0] for row in conn.execute(
+            'SELECT sku FROM products WHERE sku IN ({})'.format(','.join('?' * len(skus))),
+            skus
+        ).fetchall())
+        
+        missing_skus = set(skus) - existing_skus
+        if missing_skus:
+            return jsonify({
+                'error': 'Следующие артикулы не найдены в базе: ' + ', '.join(missing_skus)
+            }), 400
+        
+        # Обновляем позиции
+        conn.executemany(
+            'INSERT OR REPLACE INTO product_categories (sku, category_id, position) VALUES (?, ?, ?)',
+            positions
+        )
+        conn.commit()
+        
+        return jsonify({'message': 'Позиции успешно обновлены'})
+        
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/categories', methods=['POST'])
+def create_or_update_category():
+    try:
+        data = request.json
+        category_number = InputValidator.validate_integer(
+            data.get('category_number'),
+            'category_number',
+            min_value=1
+        )
+        name = InputValidator.validate_category_name(data.get('name'))
+        parent_id = data.get('parent_id')
+        is_active = bool(data.get('is_active', True))
+        
+        conn = get_db_connection()
+        try:
+            # Проверяем существование родительской категории
+            if parent_id:
+                parent = conn.execute(
+                    'SELECT id FROM feed_categories WHERE id = ?',
+                    (parent_id,)
+                ).fetchone()
+                if not parent:
+                    return jsonify({'error': 'Родительская категория не найдена'}), 404
+            
+            # Проверяем уникальность номера категории
+            existing = conn.execute(
+                'SELECT id FROM feed_categories WHERE category_number = ?',
+                (category_number,)
+            ).fetchone()
+            
+            if existing:
+                # Обновляем существующую категорию
+                conn.execute('''
+                    UPDATE feed_categories 
+                    SET name = ?, parent_id = ?, is_active = ?
+                    WHERE category_number = ?
+                ''', (name, parent_id, is_active, category_number))
+            else:
+                # Создаем новую категорию
+                conn.execute('''
+                    INSERT INTO feed_categories (category_number, name, parent_id, is_active)
+                    VALUES (?, ?, ?, ?)
+                ''', (category_number, name, parent_id, is_active))
+            
+            conn.commit()
+            return jsonify({'status': 'success'})
+        finally:
+            conn.close()
+    except ValidationError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.errorhandler(ValidationError)
 def handle_validation_error(error):
