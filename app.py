@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request, send_file
+from flask import Flask, render_template, jsonify, request, send_file, redirect, url_for
 import sqlite3
 import json
 import csv
@@ -225,6 +225,10 @@ class InputValidator:
     ) -> int:
         """Валидация целочисленных значений"""
         try:
+            # Если значение 'all', возвращаем 1
+            if str(value).lower() == 'all':
+                return 1
+                
             value = int(value)
             if min_value is not None and value < min_value:
                 raise ValidationError(f"{field_name} не может быть меньше {min_value}")
@@ -314,36 +318,42 @@ def calculate_score(product, weights):
             score *= (1 + (weights['orders_net_weight'] - 1) * (product['orders_net'] / 5))
         
         # Применяем вес DNP для товаров с датой начала продаж
-        if product.get('sale_start_date'):
-            from datetime import datetime, date
-            today = date.today()
-            try:
-                # Пробуем сначала формат DD.MM.YYYY
-                sale_start = datetime.strptime(product['sale_start_date'], '%d.%m.%Y').date()
-            except ValueError:
-                try:
-                    # Если не получилось, пробуем формат YYYY-MM-DD
-                    sale_start = datetime.strptime(product['sale_start_date'], '%Y-%m-%d').date()
-                except ValueError:
-                    # Если оба формата не подошли, пропускаем
-                    return score
+        sale_start_date = product.get('sale_start_date')
+        if sale_start_date is None:
+            sale_start_date = '01.01.2000'  # Используем дату по умолчанию
             
-            # Если дата начала продаж в прошлом, применяем штраф
-            if sale_start < today:
-                days_since_sale = (today - sale_start).days
-                # Штраф увеличивается с течением времени
-                penalty = min(1.0, days_since_sale / 365)  # Максимальный штраф через год
-                score *= (1 - penalty * weights['dnp_weight'])
-            # Если дата начала продаж в будущем, но товар уже продается - даем поощрение
-            elif sale_start > today and product.get('available', False):
-                days_until_sale = (sale_start - today).days
-                # Поощрение увеличивается с удаленностью от официальной даты
-                bonus = min(0.5, days_until_sale / 365)  # Максимальное поощрение 50%
-                score *= (1 + bonus * weights['dnp_weight'])
+        from datetime import datetime, date
+        today = date.today()
+        try:
+            # Пробуем сначала формат DD.MM.YYYY
+            sale_start = datetime.strptime(sale_start_date, '%d.%m.%Y').date()
+        except ValueError:
+            try:
+                # Если не получилось, пробуем формат YYYY-MM-DD
+                sale_start = datetime.strptime(sale_start_date, '%Y-%m-%d').date()
+            except ValueError:
+                # Если оба формата не подошли, используем дату по умолчанию
+                sale_start = datetime.strptime('01.01.2000', '%d.%m.%Y').date()
+        
+        # Если дата начала продаж в прошлом, применяем штраф
+        if sale_start < today:
+            days_since_sale = (today - sale_start).days
+            # Штраф увеличивается с течением времени
+            penalty = min(1.0, days_since_sale / 365)  # Максимальный штраф через год
+            score *= (1 - penalty * weights['dnp_weight'])
+        # Если дата начала продаж в будущем, но товар уже продается - даем поощрение
+        elif sale_start > today and product.get('available', False):
+            days_until_sale = (sale_start - today).days
+            # Поощрение увеличивается с удаленностью от официальной даты
+            bonus = min(0.5, days_until_sale / 365)  # Максимальное поощрение 50%
+            score *= (1 + bonus * weights['dnp_weight'])
         
         # Применяем штраф за скидку
         if product.get('discount') and weights['discount_penalty']:
-            score *= (1 - (product['discount'] / 100) * weights['discount_penalty'])
+            # Штраф увеличивается с ростом скидки и веса штрафа
+            penalty = (product['discount'] / 100) * weights['discount_penalty']
+            # Ограничиваем штраф, чтобы скор не становился отрицательным
+            score *= max(0.01, 1 - penalty)
     
     return round(score, 2)
 
@@ -489,6 +499,18 @@ def get_products():
             else:
                 products_list.sort(key=lambda x: -x['score'])
             
+            # Если page=all, возвращаем только информацию о страницах
+            if request.args.get('page') == 'all':
+                total_products = len(products_list)
+                total_pages = (total_products + filters.per_page - 1) // filters.per_page
+                return jsonify({
+                    'products': [],
+                    'total_pages': total_pages,
+                    'current_page': 1,
+                    'total_products': total_products
+                })
+            
+            # Иначе применяем пагинацию
             offset = (filters.page - 1) * filters.per_page
             total_products = len(products_list)
             total_pages = (total_products + filters.per_page - 1) // filters.per_page
@@ -497,7 +519,8 @@ def get_products():
             return jsonify({
                 'products': paginated_products,
                 'total_pages': total_pages,
-                'current_page': filters.page
+                'current_page': filters.page,
+                'total_products': total_products
             })
             
         finally:
