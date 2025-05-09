@@ -1008,20 +1008,41 @@
         }
 
         document.getElementById('genderFilter').addEventListener('change', () => {
-            loadProducts(1);
+            currentPage = 1;
+            loadProducts(currentPage);
         });
 
         document.getElementById('hideNoPriceSwitch').addEventListener('change', () => {
-            loadProducts(1);
+            currentPage = 1;
+            loadProducts(currentPage);
         });
 
         document.getElementById('searchButton').addEventListener('click', () => {
-            loadProducts(1);
+            currentPage = 1;
+            loadProducts(currentPage);
         });
 
         document.getElementById('searchInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
-                loadProducts(1);
+                currentPage = 1;
+                loadProducts(currentPage);
+            }
+        });
+
+        document.getElementById('perPageSelect').addEventListener('change', function() {
+            currentPage = 1;
+            loadProducts(currentPage);
+        });
+
+        // Обновляем обработчики пагинации
+        document.getElementById('pagination').addEventListener('click', (e) => {
+            if (e.target.classList.contains('page-link')) {
+                e.preventDefault();
+                const page = parseInt(e.target.dataset.page);
+                if (!isNaN(page)) {
+                    currentPage = page;
+                    loadProducts(page);
+                }
             }
         });
 
@@ -1143,21 +1164,6 @@
                 return;
             }
             window.location.href = `/api/export_category/${category_number}`;
-        });
-
-        // Обновляем обработчики пагинации
-        document.getElementById('pagination').addEventListener('click', (e) => {
-            if (e.target.classList.contains('page-link')) {
-                e.preventDefault();
-                const page = parseInt(e.target.dataset.page);
-                if (!isNaN(page) && page !== currentPage) {
-                    loadProducts(page);
-                }
-            }
-        });
-
-        document.getElementById('perPageSelect').addEventListener('change', function() {
-            loadProducts(1);
         });
 
         // Добавляю функцию для показа/скрытия категорий
