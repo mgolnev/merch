@@ -683,29 +683,30 @@
             const select = document.getElementById('categorySelect');
             const clearButton = document.getElementById('categoryClear');
             select.innerHTML = '';
-            
-            // Показываем/скрываем кнопку очистки
             clearButton.classList.toggle('visible', searchQuery.length > 0);
-            
             const allOption = document.createElement('option');
             allOption.value = 'all';
             allOption.textContent = 'Все категории';
             select.appendChild(allOption);
-            
             allCategories
-                .filter(cat =>
-                    !searchQuery ||
-                    cat.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                    String(cat.id).includes(searchQuery)
-                )
+                .filter(cat => {
+                    if (!searchQuery) return true;
+                    
+                    // Если поисковый запрос состоит только из цифр
+                    if (/^\d+$/.test(searchQuery)) {
+                        return cat.category_number && String(cat.category_number) === searchQuery;
+                    }
+                    
+                    // Для текстового поиска используем включение в
+                    return (cat.name && cat.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                           (cat.category_number && String(cat.category_number).includes(searchQuery));
+                })
                 .forEach(category => {
                     const option = document.createElement('option');
-                    option.value = category.name;
-                    option.textContent = `${category.id} – ${category.name}`;
+                    option.value = category.category_number;
+                    option.textContent = `${category.category_number} – ${category.name}`;
                     select.appendChild(option);
                 });
-            
-            // Показываем список при наличии поискового запроса или при фокусе на поле поиска
             const searchInput = document.getElementById('categorySearch');
             if (searchQuery || document.activeElement === searchInput) {
                 select.size = Math.min(10, select.options.length);
@@ -865,65 +866,70 @@
         function createProductCard(product, orderNumber) {
             const card = document.createElement('div');
             card.className = 'col-md-4 col-lg-3 product-card';
-            
             const hasDiscount = product.discount && product.discount > 0;
             const currentPrice = Math.round(product.price || 0);
             const oldPrice = Math.round(product.oldprice || 0);
-
-            card.innerHTML = `
-                <div class="card">
-                    <div class="card-header product-header d-flex flex-wrap align-items-center justify-content-between">
-                        <div class="score-badge flex-grow-1 text-center mb-2 mb-md-0">
-                            #${orderNumber} | Скор: <span class="score-value">${product.score}</span>
-                            | Позиция: ${product.category_position !== null && product.category_position !== undefined ? product.category_position : '—'}
-                        </div>
-                    </div>
-                    <a href="https://www.gloria-jeans.ru/p/${product.sku}" 
-                       target="_blank" 
-                       rel="noopener noreferrer" 
-                       class="text-decoration-none text-dark">
-                        <div class="image-container">
-                            ${product.image_url ? 
-                                `<img src="${product.image_url}" class="product-image" alt="${product.name}" 
-                                     onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\'text-center text-muted\'>Изображение недоступно</div>'">` 
-                                : '<div class="text-center text-muted">Изображение недоступно</div>'
-                            }
-                        </div>
-                        <div class="card-body">
-                            <h5 class="card-title">${product.name || 'Без названия'}</h5>
-                        </div>
-                    </a>
-                    <div class="card-body pt-0">
-                        <div class="sku">
-                            <i class="bi bi-tag"></i> ${product.sku || 'Н/Д'}
-                        </div>
-                        <div class="gender">
-                            <i class="bi bi-gender-ambiguous"></i> ${product.gender || 'Не указан'}
-                        </div>
-                        ${product.sale_start_date ? `<div class="sale-start-date">${product.sale_start_date}</div>` : ''}
-                        <div class="availability">
-                            <i class="bi bi-${product.available ? 'check-circle-fill text-success' : 'x-circle-fill text-danger'}"></i> 
-                            ${product.available ? 'В наличии' : 'Скоро в продаже'}
-                        </div>
-                        <div class="price-block">
-                            <span class="current-price">${currentPrice} ₽</span>
-                            ${hasDiscount ? `
-                                <span class="old-price">${oldPrice} ₽</span>
-                                <span class="discount-badge">-${Math.round(product.discount)}%</span>
-                            ` : ''}
-                        </div>
-                        <div class="metrics">
-                            <p>Сессии <span>${product.sessions || 0}</span></p>
-                            <p>Просмотры <span>${product.product_views || 0}</span></p>
-                            <p>Добавления в корзину <span>${product.cart_additions || 0}</span></p>
-                            <p>Оформления <span>${product.checkout_starts || 0}</span></p>
-                            <p>Заказы (Gross) <span>${product.orders_gross || 0}</span></p>
-                            <p>Заказы (Net) <span>${product.orders_net || 0}</span></p>
-                        </div>
+            // Категории
+            const categoriesHtml = product.categories && product.categories.length > 0
+                ? product.categories.map(cat => `<span class=\"badge bg-secondary me-1 mb-1\">${cat}</span>`).join('')
+                : '<span class=\"badge bg-secondary\">Без категории</span>';
+            // Блок изображения
+            let imageHtml = '';
+            if (product.image_url) {
+                imageHtml = `<div class=\"image-container mb-2\"><img src=\"${product.image_url}\" alt=\"${product.name}\" class=\"product-image\"></div>`;
+            } else {
+                imageHtml = `<div class=\"image-container mb-2 d-flex align-items-center justify-content-center\" style=\"background:#e9ecef;min-height:180px;\"><i class=\"bi bi-image\" style=\"font-size:3rem;color:#adb5bd;\"></i></div>`;
+            }
+            // Скор и позиция
+            const scoreHtml = `<span class=\"score-badge position-absolute top-0 end-0 m-2\" title=\"Скор\" style=\"background:rgba(33,37,41,0.85);color:#ffc107;padding:0.3em 0.7em;border-radius:8px;font-size:1.1rem;z-index:2;\">★ ${product.score ?? 0}</span>`;
+            const positionHtml = product.position && product.position !== 999999 ? `<span class=\"badge bg-info ms-2\" title=\"Позиция в категории\">#${product.position}</span>` : '';
+            // Метрики
+            const metricsHtml = `
+                <div class=\"metrics mt-2\" style=\"background:#f8f9fa;padding:1em;border-radius:12px;\">
+                    <div style=\"display:flex;flex-direction:column;gap:0.3em;\">
+                        <div style=\"display:flex;justify-content:space-between;\"><span>Сессии:</span><span>${product.sessions ?? 0}</span></div>
+                        <div style=\"display:flex;justify-content:space-between;\"><span>Просмотры:</span><span>${product.product_views ?? 0}</span></div>
+                        <div style=\"display:flex;justify-content:space-between;\"><span>В корзину:</span><span>${product.cart_additions ?? 0}</span></div>
+                        <div style=\"display:flex;justify-content:space-between;\"><span>Оформления:</span><span>${product.checkout_starts ?? 0}</span></div>
+                        <div style=\"display:flex;justify-content:space-between;\"><span>Заказы:</span><span>${product.orders_gross ?? 0}</span></div>
+                        <div style=\"display:flex;justify-content:space-between;\"><span>Net:</span><span>${product.orders_net ?? 0}</span></div>
+                        ${product.sale_start_date ? `<div style=\"display:flex;justify-content:space-between;\"><span>Старт продаж:</span><span>${product.sale_start_date}</span></div>` : ''}
                     </div>
                 </div>
             `;
-            
+            // Категории скрыты по умолчанию, показываются по клику
+            const categoriesBlockId = `categories-${product.sku.replace(/[^a-zA-Z0-9]/g, '')}`;
+            const categoriesToggleHtml = `<i class=\"bi bi-tags-fill category-toggle\" style=\"cursor:pointer;color:#0d6efd;font-size:1.2rem;\" title=\"Показать/скрыть категории\" onclick=\"toggleCategories('${categoriesBlockId}')\"></i>`;
+            card.innerHTML = `
+                <div class=\"card h-100 position-relative\">
+                    ${scoreHtml}
+                    ${imageHtml}
+                    <div class=\"card-body\">
+                        <div class=\"d-flex justify-content-between align-items-center mb-2\">
+                            <span class=\"sku\">SKU: ${product.sku}</span>
+                            <span class=\"order-number\">#${orderNumber}</span>
+                        </div>
+                        <div class=\"d-flex align-items-center mb-2\">
+                            ${positionHtml}
+                            <span class=\"ms-auto\">${categoriesToggleHtml}</span>
+                        </div>
+                        <p class=\"card-text\">${product.name}</p>
+                        <div id=\"${categoriesBlockId}\" class=\"categories mb-2\" style=\"display:none;\">
+                            ${categoriesHtml}
+                        </div>
+                        <div class=\"price-block\">
+                            ${hasDiscount ? `
+                                <span class=\"old-price\">${oldPrice} ₽</span>
+                                <span class=\"current-price\">${currentPrice} ₽</span>
+                                <span class=\"discount bg-danger text-white ms-2 px-2 py-1 rounded fw-bold\" style=\"font-size:1rem;\">-${product.discount}%</span>
+                            ` : `
+                                <span class=\"current-price\">${currentPrice} ₽</span>
+                            `}
+                        </div>
+                        ${metricsHtml}
+                    </div>
+                </div>
+            `;
             return card;
         }
 
@@ -969,18 +975,18 @@
         }
 
         function loadProducts(page = 1) {
-            const category = document.getElementById('categorySelect').value;
+            const category_number = document.getElementById('categorySelect').value;
             const hideNoPrice = document.getElementById('hideNoPriceSwitch').checked;
             const search = document.getElementById('searchInput').value.trim();
             const gender = document.getElementById('genderFilter').value;
             perPage = parseInt(document.getElementById('perPageSelect').value) || 20;
             
             currentPage = page;
-            currentCategory = category;
+            currentCategory = category_number;
             currentGender = gender;
             searchQuery = search;
             
-            fetch(`/api/products?category=${encodeURIComponent(category)}&page=${page}&hide_no_price=${hideNoPrice}&search=${encodeURIComponent(search)}&gender=${encodeURIComponent(gender)}&per_page=${perPage}`)
+            fetch(`/api/products?category=${encodeURIComponent(category_number)}&page=${page}&hide_no_price=${hideNoPrice}&search=${encodeURIComponent(search)}&gender=${encodeURIComponent(gender)}&per_page=${perPage}`)
                 .then(response => response.json())
                 .then(data => {
                     currentProducts = data.products;
@@ -990,7 +996,7 @@
                     // Показываем или скрываем кнопки
                     const saveCategoryOrderBtn = document.getElementById('saveCategoryOrder');
                     const exportCategoryBtn = document.getElementById('exportCategory');
-                    const showButtons = category !== 'all';
+                    const showButtons = category_number !== 'all';
                     saveCategoryOrderBtn.style.display = showButtons ? 'inline-block' : 'none';
                     exportCategoryBtn.style.display = showButtons ? 'inline-block' : 'none';
                 })
@@ -1021,19 +1027,11 @@
 
         // Добавляем функцию для сохранения порядка
         function saveCategoryOrder() {
-            const categoryName = document.getElementById('categorySelect').value;
-            if (categoryName === 'all') return;
-
-            // Находим id категории по имени
-            const categoryObj = allCategories.find(cat => cat.name === categoryName);
-            if (!categoryObj) {
-                alert('Не удалось определить id категории');
-                return;
-            }
-            const category_id = categoryObj.id;
+            const category_number = document.getElementById('categorySelect').value;
+            if (category_number === 'all') return;
 
             const products = Array.from(document.querySelectorAll('.product-card')).map((card, index) => ({
-                sku: card.querySelector('.sku').textContent.trim().replace(/^.*\s/, ''),
+                sku: card.querySelector('.sku').textContent.trim().replace(/^SKU: /, ''),
                 position: index + 1
             }));
 
@@ -1045,7 +1043,7 @@
                     },
                     body: JSON.stringify({
                         sku: product.sku,
-                        category_id: category_id,
+                        category_number: category_number,
                         position: product.position
                     })
                 })
@@ -1084,21 +1082,21 @@
 
         // Добавляем обработчик для кнопки сброса
         document.getElementById('resetButton').addEventListener('click', async () => {
-            const category = document.getElementById('categorySelect').value;
+            const category_number = document.getElementById('categorySelect').value;
             
-            if (category === 'all') {
+            if (category_number === 'all') {
                 alert('Пожалуйста, выберите категорию для сброса ручных позиций');
                 return;
             }
             
-            if (confirm(`Вы уверены, что хотите сбросить ручные позиции в категории "${category}"? Это действие нельзя отменить.`)) {
+            if (confirm(`Вы уверены, что хотите сбросить ручные позиции в категории №${category_number}? Это действие нельзя отменить.`)) {
                 try {
                     const response = await fetch('/api/reset_category_order', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ category })
+                        body: JSON.stringify({ category_number })
                     });
 
                     if (response.ok) {
@@ -1118,20 +1116,12 @@
 
         // В секции JavaScript добавляем обработчик для кнопки выгрузки
         document.getElementById('exportCategory').addEventListener('click', () => {
-            const category = document.getElementById('categorySelect').value;
-            if (category === 'all') {
+            const category_number = document.getElementById('categorySelect').value;
+            if (category_number === 'all') {
                 alert('Пожалуйста, выберите категорию для выгрузки');
                 return;
             }
-            // Найти объект категории по имени
-            const categoryObj = allCategories.find(cat => cat.name === category);
-            if (!categoryObj) {
-                alert('Не удалось определить id категории');
-                return;
-            }
-            // Используем category_number, если есть, иначе id
-            const catNum = categoryObj.category_number || categoryObj.id;
-            window.location.href = `/api/export_category/${catNum}`;
+            window.location.href = `/api/export_category/${category_number}`;
         });
 
         // Обновляем обработчики пагинации
@@ -1148,6 +1138,14 @@
         document.getElementById('perPageSelect').addEventListener('change', function() {
             loadProducts(1);
         });
+
+        // Добавляю функцию для показа/скрытия категорий
+        function toggleCategories(id) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.style.display = (el.style.display === 'none' || el.style.display === '') ? 'block' : 'none';
+            }
+        }
     </script>
 </body>
 </html> 

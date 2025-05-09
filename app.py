@@ -382,23 +382,28 @@ def get_products():
         weights = cursor.fetchone()
         
         # --- Считаем total_count отдельным простым запросом ---
-        count_query = 'SELECT COUNT(*) FROM products WHERE 1=1'
+        count_query = '''
+            SELECT COUNT(DISTINCT p.sku) 
+            FROM products p
+            LEFT JOIN product_categories pc ON p.sku = pc.sku
+            LEFT JOIN feed_categories fc ON pc.category_id = fc.id
+            WHERE 1=1
+        '''
         count_params = []
         if category != 'all':
-            count_query += ' AND category = ?'
-            count_params.append(category)
+            count_query += ' AND fc.category_number = ?'
+            count_params.append(int(category))
         if hide_no_price:
-            count_query += ' AND price > 0'
+            count_query += ' AND p.price > 0'
         if search:
-            count_query += ' AND (sku LIKE ? OR name LIKE ?)'
+            count_query += ' AND (p.sku LIKE ? OR p.name LIKE ?)'
             search_param = f'%{search}%'
             count_params.extend([search_param, search_param])
         if gender != 'all':
-            count_query += ' AND gender = ?'
+            count_query += ' AND p.gender = ?'
             count_params.append(gender)
         cursor.execute(count_query, count_params)
         total_count = cursor.fetchone()[0]
-        # --- Конец блока подсчёта ---
         
         # Формируем основной запрос с сортировкой и пагинацией
         query = '''
@@ -410,7 +415,6 @@ def get_products():
                     p.oldprice,
                     p.discount,
                     p.gender,
-                    p.category,
                     p.image_url,
                     p.sale_start_date,
                     p.available,
@@ -424,18 +428,19 @@ def get_products():
                         WHEN pc.position IS NOT NULL THEN 1
                         ELSE 2
                     END as has_position,
-                    COALESCE(pc.position, 999999) as position
+                    COALESCE(pc.position, 999999) as position,
+                    GROUP_CONCAT(fc.name) as category_names,
+                    GROUP_CONCAT(fc.category_number) as category_numbers
                 FROM products p 
                 LEFT JOIN product_metrics pm ON p.sku = pm.sku 
-                LEFT JOIN product_categories pc ON p.sku = pc.sku AND pc.category_id = (
-                    SELECT id FROM feed_categories WHERE name = p.category LIMIT 1
-                )
+                LEFT JOIN product_categories pc ON p.sku = pc.sku
+                LEFT JOIN feed_categories fc ON pc.category_id = fc.id
                 WHERE 1=1
         '''
         params = []
         if category != 'all':
-            query += ' AND p.category = ?'
-            params.append(category)
+            query += ' AND fc.category_number = ?'
+            params.append(int(category))
         if hide_no_price:
             query += ' AND p.price > 0'
         if search:
@@ -446,9 +451,11 @@ def get_products():
             query += ' AND p.gender = ?'
             params.append(gender)
         query += '''
+            GROUP BY p.sku
             )
             SELECT * FROM ProductScores
         '''
+        
         # --- Сортировка ---
         if category == 'all':
             # Без сортировки и лимита в SQL
@@ -463,7 +470,6 @@ def get_products():
                     'oldprice': product['oldprice'],
                     'discount': product['discount'],
                     'gender': product['gender'],
-                    'category': product['category'],
                     'image_url': product['image_url'],
                     'sale_start_date': product['sale_start_date'],
                     'available': bool(product['available']),
@@ -473,7 +479,8 @@ def get_products():
                     'checkout_starts': product['checkout_starts'],
                     'orders_gross': product['orders_gross'],
                     'orders_net': product['orders_net'],
-                    'categories': [product['category']] if product['category'] else []
+                    'categories': product['category_names'].split(',') if product['category_names'] else [],
+                    'category_numbers': [int(x) for x in product['category_numbers'].split(',')] if product['category_numbers'] else []
                 }
                 product_dict['score'] = calculate_score(product_dict, weights)
                 result.append(product_dict)
@@ -495,7 +502,6 @@ def get_products():
                     'oldprice': product['oldprice'],
                     'discount': product['discount'],
                     'gender': product['gender'],
-                    'category': product['category'],
                     'image_url': product['image_url'],
                     'sale_start_date': product['sale_start_date'],
                     'available': bool(product['available']),
@@ -505,7 +511,8 @@ def get_products():
                     'checkout_starts': product['checkout_starts'],
                     'orders_gross': product['orders_gross'],
                     'orders_net': product['orders_net'],
-                    'categories': [product['category']] if product['category'] else [],
+                    'categories': product['category_names'].split(',') if product['category_names'] else [],
+                    'category_numbers': [int(x) for x in product['category_numbers'].split(',')] if product['category_numbers'] else [],
                     'has_position': product['has_position'],
                     'position': product['position']
                 }
@@ -518,21 +525,19 @@ def get_products():
             with_position.sort(key=lambda x: (x['position'] if x['position'] is not None else 999999))
             without_position.sort(key=lambda x: x['score'], reverse=True)
             result = with_position + without_position
-            # Пагинация в Python
             start = (page - 1) * per_page
             end = start + per_page
             result = result[start:end]
-        conn.close()
-        response = {
+        
+        total_pages = (total_count + per_page - 1) // per_page
+        
+        return jsonify({
             'products': result,
-            'total': total_count,
             'page': page,
-            'per_page': per_page,
-            'total_pages': (total_count + per_page - 1) // per_page
-        }
-        return jsonify(response)
-    except ValueError as e:
-        return jsonify({'error': f'Ошибка валидации фильтров: {str(e)}'}), 500
+            'total_pages': total_pages,
+            'total_count': total_count
+        })
+        
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -542,14 +547,14 @@ def get_categories():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        # Получаем id и name всех категорий
+        # Получаем id, category_number и name всех категорий
         cursor.execute('''
-            SELECT id, name 
+            SELECT id, category_number, name 
             FROM feed_categories 
             WHERE is_active = 1
             ORDER BY name
         ''')
-        categories_list = [{'id': row[0], 'name': row[1]} for row in cursor.fetchall()]
+        categories_list = [{'id': row[0], 'category_number': row[1], 'name': row[2]} for row in cursor.fetchall()]
         conn.close()
         return jsonify(categories_list)
     except Exception as e:
@@ -678,14 +683,20 @@ def update_category_score():
 def update_category_order():
     try:
         # Валидация входных данных
-        validated_data = InputValidator.validate_category_order(request.json)
+        data = request.json
+        sku = data.get('sku')
+        category_number = data.get('category_number')
+        position = data.get('position')
+        
+        if not all([sku, category_number, position]):
+            return jsonify({'error': 'Missing required fields'}), 400
         
         conn = get_db_connection()
         try:
-            # Проверяем существование категории
+            # Получаем ID категории по номеру
             category = conn.execute(
-                'SELECT id FROM feed_categories WHERE id = ?',
-                (validated_data['category_id'],)
+                'SELECT id FROM feed_categories WHERE category_number = ?',
+                (category_number,)
             ).fetchone()
             
             if not category:
@@ -694,7 +705,7 @@ def update_category_order():
             # Проверяем существование товара
             product = conn.execute(
                 'SELECT sku FROM products WHERE sku = ?',
-                (validated_data['sku'],)
+                (sku,)
             ).fetchone()
             
             if not product:
@@ -705,9 +716,9 @@ def update_category_order():
                 INSERT OR REPLACE INTO product_categories (sku, category_id, position)
                 VALUES (?, ?, ?)
             ''', (
-                validated_data['sku'],
-                validated_data['category_id'],
-                validated_data['position']
+                sku,
+                category['id'],
+                position
             ))
             
             conn.commit()
@@ -715,8 +726,6 @@ def update_category_order():
         finally:
             conn.close()
             
-    except ValidationError as e:
-        return jsonify({'error': str(e)}), 400
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -751,13 +760,13 @@ def reset_weights():
 @app.route('/api/reset_category_order', methods=['POST'])
 def reset_category_order():
     data = request.json
-    category_name = data.get('category')
-    if not category_name:
-        return jsonify({'status': 'error', 'message': 'Не указана категория'}), 400
+    category_number = data.get('category_number')
+    if not category_number:
+        return jsonify({'status': 'error', 'message': 'Не указан номер категории'}), 400
     conn = get_db_connection()
     try:
-        # Получаем id категории по имени
-        category = conn.execute('SELECT id FROM feed_categories WHERE name = ?', (category_name,)).fetchone()
+        # Получаем id категории по номеру
+        category = conn.execute('SELECT id FROM feed_categories WHERE category_number = ?', (category_number,)).fetchone()
         if not category:
             return jsonify({'status': 'error', 'message': 'Категория не найдена'}), 404
         category_id = category['id']
