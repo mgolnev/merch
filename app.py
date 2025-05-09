@@ -787,8 +787,8 @@ def reset_category_order():
         if not category:
             return jsonify({'status': 'error', 'message': 'Категория не найдена'}), 404
         category_id = category['id']
-        # Удаляем все позиции из product_categories для этой категории
-        conn.execute('DELETE FROM product_categories WHERE category_id = ?', (category_id,))
+        # Обнуляем позиции в product_categories для этой категории, но сохраняем связи
+        conn.execute('UPDATE product_categories SET position = NULL WHERE category_id = ?', (category_id,))
         conn.commit()
         return jsonify({'status': 'success'})
     except Exception as e:
