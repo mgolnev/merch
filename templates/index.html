@@ -913,7 +913,7 @@
                             ${positionHtml}
                             <span class=\"ms-auto\">${categoriesToggleHtml}</span>
                         </div>
-                        <p class=\"card-text\">${product.name}</p>
+                        <p class="card-text">${product.url ? `<a href="${product.url}" target="_blank" rel="noopener noreferrer">${product.name}</a>` : product.name}</p>
                         <div id=\"${categoriesBlockId}\" class=\"categories mb-2\" style=\"display:none;\">
                             ${categoriesHtml}
                         </div>
@@ -1025,39 +1025,60 @@
             }
         });
 
-        // Добавляем функцию для сохранения порядка
-        function saveCategoryOrder() {
+        // --- Новый saveCategoryOrder с поддержкой drag-and-drop и массового сохранения ---
+        async function saveCategoryOrder() {
             const category_number = document.getElementById('categorySelect').value;
             if (category_number === 'all') return;
 
-            const products = Array.from(document.querySelectorAll('.product-card')).map((card, index) => ({
-                sku: card.querySelector('.sku').textContent.trim().replace(/^SKU: /, ''),
-                position: index + 1
-            }));
+            // Получаем все товары категории
+            const response = await fetch(`/api/products?category=${category_number}&page=all&hide_no_price=true&search=&gender=all&per_page=5000`);
+            const data = await response.json();
+            const allProducts = data.products;
 
-            Promise.all(products.map(product => 
-                fetch('/api/category_order', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        sku: product.sku,
-                        category_number: category_number,
-                        position: product.position
-                    })
-                })
-            )).then(() => {
-                alert('Порядок товаров сохранен!');
-                loadProducts(); // Перезагружаем список
-            }).catch(error => {
-                console.error('Error saving order:', error);
-                alert('Ошибка при сохранении порядка товаров');
+            // Получаем порядок после drag-and-drop на текущей странице
+            const draggedSkus = Array.from(document.querySelectorAll('.product-card .sku')).map(el =>
+                el.textContent.trim().replace(/^SKU: /, '')
+            );
+
+            // Формируем итоговый массив: сначала drag-and-drop, потом остальные
+            const draggedSet = new Set(draggedSkus);
+            const positions = [];
+
+            // Сначала отсортированные на странице
+            draggedSkus.forEach((sku, idx) => {
+                positions.push({ sku, category_number, position: idx + 1 });
             });
-        }
 
-        // Добавляем обработчик для кнопки сохранения
+            // Потом остальные товары
+            let pos = draggedSkus.length + 1;
+            allProducts.forEach(product => {
+                if (!draggedSet.has(product.sku)) {
+                    positions.push({ sku: product.sku, category_number, position: pos++ });
+                }
+            });
+
+            // Отправляем на сервер
+            try {
+                const res = await fetch('/api/category_order_bulk', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(positions)
+                });
+                const result = await res.json();
+                if (result.status === 'success') {
+                    alert('Порядок товаров сохранён для всей категории!');
+                    loadProducts(1);
+                } else {
+                    alert('Ошибка: ' + (result.error || 'Не удалось сохранить порядок'));
+                }
+            } catch (e) {
+                alert('Ошибка при сохранении порядка: ' + e.message);
+            }
+        }
+        // ... existing code ...
+        // Заменяю обработчик кнопки на новый
         document.getElementById('saveCategoryOrder').addEventListener('click', saveCategoryOrder);
+        // ... existing code ...
 
         // Добавляем drag-and-drop функциональность
         function enableDragAndDrop() {

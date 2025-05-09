@@ -429,8 +429,9 @@ def get_products():
                         ELSE 2
                     END as has_position,
                     COALESCE(pc.position, 999999) as position,
-                    GROUP_CONCAT(fc.name) as category_names,
-                    GROUP_CONCAT(fc.category_number) as category_numbers
+                    GROUP_CONCAT(DISTINCT fc.name) as category_names,
+                    GROUP_CONCAT(DISTINCT fc.category_number) as category_numbers,
+                    p.url
                 FROM products p 
                 LEFT JOIN product_metrics pm ON p.sku = pm.sku 
                 LEFT JOIN product_categories pc ON p.sku = pc.sku
@@ -480,7 +481,8 @@ def get_products():
                     'orders_gross': product['orders_gross'],
                     'orders_net': product['orders_net'],
                     'categories': product['category_names'].split(',') if product['category_names'] else [],
-                    'category_numbers': [int(x) for x in product['category_numbers'].split(',')] if product['category_numbers'] else []
+                    'category_numbers': [int(x) for x in product['category_numbers'].split(',')] if product['category_numbers'] else [],
+                    'url': product['url']
                 }
                 product_dict['score'] = calculate_score(product_dict, weights)
                 result.append(product_dict)
@@ -514,7 +516,8 @@ def get_products():
                     'categories': product['category_names'].split(',') if product['category_names'] else [],
                     'category_numbers': [int(x) for x in product['category_numbers'].split(',')] if product['category_numbers'] else [],
                     'has_position': product['has_position'],
-                    'position': product['position']
+                    'position': product['position'],
+                    'url': product['url']
                 }
                 product_dict['score'] = calculate_score(product_dict, weights)
                 if product['has_position'] == 1:
@@ -733,7 +736,25 @@ def update_category_order():
 def reset_weights():
     conn = get_db_connection()
     try:
-        # Сбрасываем веса к значениям по умолчанию
+        # Получаем текущие веса
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM weights ORDER BY id DESC LIMIT 1')
+        current_weights = cursor.fetchone()
+        
+        # Проверяем, изменились ли веса
+        if current_weights and all(current_weights[field] == value for field, value in {
+            'sessions_weight': 1.0,
+            'views_weight': 1.0,
+            'cart_weight': 1.0,
+            'checkout_weight': 1.0,
+            'orders_gross_weight': 1.0,
+            'orders_net_weight': 1.0,
+            'discount_penalty': 0.0,
+            'dnp_weight': 1.0
+        }.items()):
+            return jsonify({'status': 'success', 'message': 'Веса уже сброшены'})
+        
+        # Сбрасываем только веса
         conn.execute('''
             INSERT INTO weights (
                 sessions_weight,
@@ -746,12 +767,8 @@ def reset_weights():
                 dnp_weight
             ) VALUES (1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 1.0)
         ''')
-        
-        # Удаляем все ручные позиции
-        conn.execute('DELETE FROM category_order')
-        
         conn.commit()
-        return jsonify({'status': 'success'})
+        return jsonify({'status': 'success', 'message': 'Веса успешно сброшены'})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
     finally:
@@ -783,29 +800,33 @@ def reset_category_order():
 def export_category(category_number):
     conn = get_db_connection()
     try:
-        # Получаем ID категории
+        # Получаем ID и номер категории
         category = conn.execute(
-            'SELECT id, name FROM feed_categories WHERE category_number = ?',
+            'SELECT id, name, category_number FROM feed_categories WHERE category_number = ?',
             (category_number,)
         ).fetchone()
         
         if not category:
             return jsonify({'error': 'Категория не найдена'}), 404
         
-        # Получаем данные о позициях товаров в категории
+        # Получаем все товары из категории (даже без позиции)
         query = """
             SELECT 
                 p.sku,
-                pc.category_id,
+                ? as category_id,  -- подставляем номер категории
                 pc.position
             FROM products p 
-            JOIN product_categories pc ON p.sku = pc.sku
-            WHERE pc.category_id = ?
+            LEFT JOIN product_categories pc ON p.sku = pc.sku AND pc.category_id = ?
+            WHERE pc.category_id = ? OR (
+                pc.category_id IS NULL AND EXISTS (
+                    SELECT 1 FROM product_categories pc2 WHERE pc2.sku = p.sku AND pc2.category_id = ?
+                )
+            )
             ORDER BY 
                 CASE WHEN pc.position IS NOT NULL THEN 1 ELSE 2 END,
                 pc.position
         """
-        products = conn.execute(query, (category['id'],)).fetchall()
+        products = conn.execute(query, (category['category_number'], category['id'], category['id'], category['id'])).fetchall()
         
         # Создаем CSV в памяти
         output = io.StringIO()
@@ -946,6 +967,51 @@ def create_or_update_category():
             conn.close()
     except ValidationError as e:
         return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/category_order_bulk', methods=['POST'])
+def update_category_order_bulk():
+    try:
+        data = request.json
+        if not isinstance(data, list):
+            return jsonify({'error': 'Ожидался список объектов'}), 400
+        if not data:
+            return jsonify({'error': 'Пустой список'}), 400
+        # Проверяем, что у всех есть нужные поля
+        for item in data:
+            if not all(k in item for k in ('sku', 'category_number', 'position')):
+                return jsonify({'error': 'Каждый объект должен содержать sku, category_number, position'}), 400
+        category_number = data[0]['category_number']
+        conn = get_db_connection()
+        try:
+            # Получаем id категории по номеру
+            category = conn.execute('SELECT id FROM feed_categories WHERE category_number = ?', (category_number,)).fetchone()
+            if not category:
+                return jsonify({'error': 'Категория не найдена'}), 404
+            category_id = category['id']
+            if data:  # Только если массив не пустой
+                # Удаляю все старые связи для этой категории
+                conn.execute('DELETE FROM product_categories WHERE category_id = ?', (category_id,))
+                # Проверяем существование всех sku
+                skus = [item['sku'] for item in data]
+                existing_skus = set(row[0] for row in conn.execute(
+                    'SELECT sku FROM products WHERE sku IN ({})'.format(','.join('?' * len(skus))),
+                    skus
+                ).fetchall())
+                missing_skus = set(skus) - existing_skus
+                if missing_skus:
+                    return jsonify({'error': 'Следующие артикулы не найдены в базе: ' + ', '.join(missing_skus)}), 400
+                # Обновляем позиции
+                positions = [(item['sku'], category_id, item['position']) for item in data]
+                conn.executemany(
+                    'INSERT OR REPLACE INTO product_categories (sku, category_id, position) VALUES (?, ?, ?)',
+                    positions
+                )
+            conn.commit()
+            return jsonify({'status': 'success'})
+        finally:
+            conn.close()
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
