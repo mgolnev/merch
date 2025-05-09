@@ -837,16 +837,6 @@
             nextLi.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
             nextLi.innerHTML = `<a class="page-link" href="#" data-page="${currentPage + 1}">Следующая</a>`;
             pagination.appendChild(nextLi);
-
-            pagination.querySelectorAll('.page-link').forEach(link => {
-                link.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    const page = parseInt(e.target.dataset.page);
-                    if (!isNaN(page) && page !== currentPage) {
-                        loadProducts(currentCategory, page, searchQuery, currentGender);
-                    }
-                });
-            });
         }
 
         function displayProducts(products) {
@@ -933,47 +923,6 @@
             return card;
         }
 
-        function updatePagination(currentPage, totalPages) {
-            const pagination = document.getElementById('pagination');
-            pagination.innerHTML = '';
-            
-            if (totalPages <= 1) return;
-            
-            // Предыдущая страница
-            const prevBtn = document.createElement('button');
-            prevBtn.className = 'btn btn-outline-primary' + (currentPage === 1 ? ' disabled' : '');
-            prevBtn.innerHTML = '&laquo;';
-            if (currentPage > 1) {
-                prevBtn.onclick = () => loadProducts(currentPage - 1);
-            }
-            pagination.appendChild(prevBtn);
-            
-            // Номера страниц
-            for (let i = 1; i <= totalPages; i++) {
-                if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
-                    const pageBtn = document.createElement('button');
-                    pageBtn.className = 'btn ' + (i === currentPage ? 'btn-primary' : 'btn-outline-primary');
-                    pageBtn.textContent = i;
-                    pageBtn.onclick = () => loadProducts(i);
-                    pagination.appendChild(pageBtn);
-                } else if (i === currentPage - 3 || i === currentPage + 3) {
-                    const dots = document.createElement('span');
-                    dots.className = 'pagination-dots';
-                    dots.textContent = '...';
-                    pagination.appendChild(dots);
-                }
-            }
-            
-            // Следующая страница
-            const nextBtn = document.createElement('button');
-            nextBtn.className = 'btn btn-outline-primary' + (currentPage === totalPages ? ' disabled' : '');
-            nextBtn.innerHTML = '&raquo;';
-            if (currentPage < totalPages) {
-                nextBtn.onclick = () => loadProducts(currentPage + 1);
-            }
-            pagination.appendChild(nextBtn);
-        }
-
         function loadProducts(page = 1) {
             const category_number = document.getElementById('categorySelect').value;
             const hideNoPrice = document.getElementById('hideNoPriceSwitch').checked;
@@ -981,17 +930,26 @@
             const gender = document.getElementById('genderFilter').value;
             perPage = parseInt(document.getElementById('perPageSelect').value) || 20;
             
-            currentPage = page;
-            currentCategory = category_number;
-            currentGender = gender;
-            searchQuery = search;
+            // Блокируем кнопки пагинации во время загрузки
+            const pagination = document.getElementById('pagination');
+            pagination.style.pointerEvents = 'none';
+            pagination.style.opacity = '0.5';
             
             fetch(`/api/products?category=${encodeURIComponent(category_number)}&page=${page}&hide_no_price=${hideNoPrice}&search=${encodeURIComponent(search)}&gender=${encodeURIComponent(gender)}&per_page=${perPage}`)
                 .then(response => response.json())
                 .then(data => {
                     currentProducts = data.products;
+                    currentPage = page;
+                    currentCategory = category_number;
+                    currentGender = gender;
+                    searchQuery = search;
+                    
                     displayProducts(data.products);
                     createPagination(data.page, data.total_pages);
+                    
+                    // Разблокируем кнопки пагинации после загрузки
+                    pagination.style.pointerEvents = 'auto';
+                    pagination.style.opacity = '1';
                     
                     // Показываем или скрываем кнопки
                     const saveCategoryOrderBtn = document.getElementById('saveCategoryOrder');
@@ -1004,6 +962,10 @@
                     console.error('Error:', error);
                     const container = document.getElementById('productsContainer');
                     container.innerHTML = '<p class="text-center mt-5 text-danger">Ошибка при загрузке товаров</p>';
+                    
+                    // Разблокируем кнопки пагинации в случае ошибки
+                    pagination.style.pointerEvents = 'auto';
+                    pagination.style.opacity = '1';
                 });
         }
 
@@ -1039,8 +1001,7 @@
             if (e.target.classList.contains('page-link')) {
                 e.preventDefault();
                 const page = parseInt(e.target.dataset.page);
-                if (!isNaN(page)) {
-                    currentPage = page;
+                if (!isNaN(page) && page !== currentPage && !e.target.parentElement.classList.contains('disabled')) {
                     loadProducts(page);
                 }
             }
