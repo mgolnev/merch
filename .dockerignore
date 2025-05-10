@@ -1,0 +1,33 @@
+# Исключаем системные файлы и директории
+.git
+.github
+.gitignore
+.idea
+.vscode
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+.venv
+.pytest_cache
+
+# Данные
+*.db
+*.xlsx
+feed.xml
+data.xlsx
+processed_data.xlsx
+dnp.xlsx
+
+# Документация
+README.md
+LICENSE
+*.md
+
+# Другие исключения
+.DS_Store
+Thumbs.db 

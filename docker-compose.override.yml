@@ -1,0 +1,17 @@
+version: '3'
+
+services:
+  web:
+    volumes:
+      - .:/app
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+    command: python run.py
+    ports:
+      - "5001:5001"
+
+  # Отключаем nginx для разработки
+  nginx:
+    profiles:
+      - production 

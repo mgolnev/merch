@@ -703,8 +703,9 @@
                 })
                 .forEach(category => {
                     const option = document.createElement('option');
-                    option.value = category.category_number;
-                    option.textContent = `${category.category_number} – ${category.name}`;
+                    option.value = category.id;
+                    option.dataset.id = category.id;
+                    option.textContent = `${category.id} – ${category.name}`;
                     select.appendChild(option);
                 });
             const searchInput = document.getElementById('categorySearch');
@@ -924,7 +925,9 @@
         }
 
         function loadProducts(page = 1) {
-            const category_number = document.getElementById('categorySelect').value;
+            const categorySelect = document.getElementById('categorySelect');
+            const selectedOption = categorySelect.options[categorySelect.selectedIndex];
+            const categoryId = selectedOption.value;
             const hideNoPrice = document.getElementById('hideNoPriceSwitch').checked;
             const search = document.getElementById('searchInput').value.trim();
             const gender = document.getElementById('genderFilter').value;
@@ -935,12 +938,12 @@
             pagination.style.pointerEvents = 'none';
             pagination.style.opacity = '0.5';
             
-            fetch(`/api/products?category=${encodeURIComponent(category_number)}&page=${page}&hide_no_price=${hideNoPrice}&search=${encodeURIComponent(search)}&gender=${encodeURIComponent(gender)}&per_page=${perPage}`)
+            fetch(`/api/products?category=${encodeURIComponent(categoryId)}&page=${page}&hide_no_price=${hideNoPrice}&search=${encodeURIComponent(search)}&gender=${encodeURIComponent(gender)}&per_page=${perPage}`)
                 .then(response => response.json())
                 .then(data => {
                     currentProducts = data.products;
                     currentPage = page;
-                    currentCategory = category_number;
+                    currentCategory = categoryId;
                     currentGender = gender;
                     searchQuery = search;
                     
@@ -954,7 +957,7 @@
                     // Показываем или скрываем кнопки
                     const saveCategoryOrderBtn = document.getElementById('saveCategoryOrder');
                     const exportCategoryBtn = document.getElementById('exportCategory');
-                    const showButtons = category_number !== 'all';
+                    const showButtons = categoryId !== 'all';
                     saveCategoryOrderBtn.style.display = showButtons ? 'inline-block' : 'none';
                     exportCategoryBtn.style.display = showButtons ? 'inline-block' : 'none';
                 })
@@ -1009,11 +1012,13 @@
 
         // --- Новый saveCategoryOrder с поддержкой drag-and-drop и массового сохранения ---
         async function saveCategoryOrder() {
-            const category_number = document.getElementById('categorySelect').value;
-            if (category_number === 'all') return;
+            const categorySelect = document.getElementById('categorySelect');
+            const selectedOption = categorySelect.options[categorySelect.selectedIndex];
+            const categoryId = selectedOption.value;
+            if (categoryId === 'all') return;
 
             // Получаем все товары категории
-            const response = await fetch(`/api/products?category=${category_number}&page=all&hide_no_price=true&search=&gender=all&per_page=5000`);
+            const response = await fetch(`/api/products?category=${categoryId}&page=all&hide_no_price=true&search=&gender=all&per_page=5000`);
             const data = await response.json();
             const allProducts = data.products;
 
@@ -1028,33 +1033,37 @@
 
             // Сначала отсортированные на странице
             draggedSkus.forEach((sku, idx) => {
-                positions.push({ sku, category_number, position: idx + 1 });
+                positions.push({ sku, category_id: categoryId, position: idx + 1 });
             });
 
             // Потом остальные товары
             let pos = draggedSkus.length + 1;
             allProducts.forEach(product => {
                 if (!draggedSet.has(product.sku)) {
-                    positions.push({ sku: product.sku, category_number, position: pos++ });
+                    positions.push({ sku: product.sku, category_id: categoryId, position: pos++ });
                 }
             });
 
             // Отправляем на сервер
             try {
-                const res = await fetch('/api/category_order_bulk', {
+                const response = await fetch('/api/category_order_bulk', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
                     body: JSON.stringify(positions)
                 });
-                const result = await res.json();
-                if (result.status === 'success') {
-                    alert('Порядок товаров сохранён для всей категории!');
-                    loadProducts(1);
+
+                if (response.ok) {
+                    alert('Порядок категории успешно сохранен');
+                    loadProducts(currentPage);
                 } else {
-                    alert('Ошибка: ' + (result.error || 'Не удалось сохранить порядок'));
+                    const data = await response.json();
+                    alert(data.message || 'Ошибка при сохранении порядка категории');
                 }
-            } catch (e) {
-                alert('Ошибка при сохранении порядка: ' + e.message);
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Произошла ошибка при сохранении порядка категории');
             }
         }
         // ... existing code ...
@@ -1085,26 +1094,27 @@
 
         // Добавляем обработчик для кнопки сброса
         document.getElementById('resetButton').addEventListener('click', async () => {
-            const category_number = document.getElementById('categorySelect').value;
+            const categorySelect = document.getElementById('categorySelect');
+            const selectedOption = categorySelect.options[categorySelect.selectedIndex];
+            const categoryId = selectedOption.value;
             
-            if (category_number === 'all') {
+            if (categoryId === 'all') {
                 alert('Пожалуйста, выберите категорию для сброса ручных позиций');
                 return;
             }
             
-            if (confirm(`Вы уверены, что хотите сбросить ручные позиции в категории №${category_number}? Это действие нельзя отменить.`)) {
+            if (confirm(`Вы уверены, что хотите сбросить ручные позиции в категории? Это действие нельзя отменить.`)) {
                 try {
                     const response = await fetch('/api/reset_category_order', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ category_number })
+                        body: JSON.stringify({ category_id: categoryId })
                     });
 
                     if (response.ok) {
                         alert('Ручные позиции успешно сброшены');
-                        // Вместо window.location.reload(); вызываем только обновление товаров
                         loadProducts(1);
                     } else {
                         const data = await response.json();
@@ -1119,12 +1129,13 @@
 
         // В секции JavaScript добавляем обработчик для кнопки выгрузки
         document.getElementById('exportCategory').addEventListener('click', () => {
-            const category_number = document.getElementById('categorySelect').value;
-            if (category_number === 'all') {
+            const categorySelect = document.getElementById('categorySelect');
+            const selectedOption = categorySelect.options[categorySelect.selectedIndex];
+            if (selectedOption.value === 'all') {
                 alert('Пожалуйста, выберите категорию для выгрузки');
                 return;
             }
-            window.location.href = `/api/export_category/${category_number}`;
+            window.location.href = `/api/export_category/${selectedOption.dataset.id}`;
         });
 
         // Добавляю функцию для показа/скрытия категорий
