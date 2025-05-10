@@ -24,9 +24,9 @@ def calculate_score(product, weights):
     score += checkout * weights_dict.get('checkout_weight', 1.0)
     score += orders_gross * weights_dict.get('orders_gross_weight', 1.0)
     score += orders_net * weights_dict.get('orders_net_weight', 1.0)
-    # Штраф за скидку
+    # Квадратичный штраф за скидку
     discount_penalty = weights_dict.get('discount_penalty', 0.0)
-    score -= discount * discount_penalty if discount_penalty > 0 else 0
+    score -= (discount ** 2) * discount_penalty / 100 if discount_penalty > 0 else 0
     return round(score, 1)
 
 def get_products(filters: ProductFilters) -> Dict[str, Any]:

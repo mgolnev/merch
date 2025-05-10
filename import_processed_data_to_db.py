@@ -55,7 +55,17 @@ def main():
         orders_net = int(row.get('orders_net', 0))
         revenue_vat = float(row.get('revenue_vat', 0))
         revenue_net = float(row.get('revenue_net', 0))
-        sale_start_date = str(row.get('sale_start_date', '01.01.2000'))
+        sale_start_date = row.get('sale_start_date', '01.01.2000')
+        # Приводим дату к строке в формате DD.MM.YYYY
+        if pd.isna(sale_start_date):
+            sale_start_date = '01.01.2000'
+        elif hasattr(sale_start_date, 'strftime'):
+            sale_start_date = sale_start_date.strftime('%d.%m.%Y')
+        else:
+            try:
+                sale_start_date = pd.to_datetime(sale_start_date).strftime('%d.%m.%Y')
+            except Exception:
+                sale_start_date = '01.01.2000'
         categories = str(row.get('categories', ''))
         url = str(row.get('url', ''))
         # upsert в products
