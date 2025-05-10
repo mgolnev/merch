@@ -27,7 +27,7 @@ def calculate_score(product, weights):
     # Штраф за скидку
     discount_penalty = weights_dict.get('discount_penalty', 0.0)
     score -= discount * discount_penalty if discount_penalty > 0 else 0
-    return score
+    return round(score, 1)
 
 def get_products(filters: ProductFilters) -> Dict[str, Any]:
     """Получение списка продуктов с пагинацией и фильтрацией"""
