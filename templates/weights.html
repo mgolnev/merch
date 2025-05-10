@@ -116,14 +116,16 @@
                                step="0.1" min="0" value="{{ weights.discount_penalty }}" required>
                         <small class="form-text text-muted">Штрафной коэффициент за использование скидок</small>
                     </div>
+                </div>
+
+                <div class="weight-group">
+                    <h5 class="mb-3">Бонус за новизну</h5>
                     <div class="form-group">
-                        <label for="dnp_weight">Вес даты начала продаж (DNP):</label>
-                        <input type="number" class="form-control" id="dnp_weight" name="dnp_weight" 
-                               step="0.1" min="0" value="{{ weights.dnp_weight }}" required>
+                        <label for="sale_start_weight">Вес новизны товара:</label>
+                        <input type="number" class="form-control" id="sale_start_weight" name="sale_start_weight"
+                               step="0.1" min="0" value="{{ weights.sale_start_weight }}" required>
                         <small class="form-text text-muted">
-                            Влияние даты начала продаж на скор. 
-                            Товары с прошедшей датой начала продаж получат штраф к скору, 
-                            который увеличивается со временем.
+                            Бонус за новизну товара. Чем новее товар (дата старта ближе к текущей или в будущем), тем выше скор.
                         </small>
                     </div>
                 </div>
@@ -151,7 +153,7 @@
                 orders_gross_weight: parseFloat(document.getElementById('orders_gross_weight').value),
                 orders_net_weight: parseFloat(document.getElementById('orders_net_weight').value),
                 discount_penalty: parseFloat(document.getElementById('discount_penalty').value),
-                dnp_weight: parseFloat(document.getElementById('dnp_weight').value)
+                sale_start_weight: parseFloat(document.getElementById('sale_start_weight').value)
             };
 
             try {

@@ -46,7 +46,7 @@ def init_db():
             orders_gross_weight REAL DEFAULT 1.0,
             orders_net_weight REAL DEFAULT 1.0,
             discount_penalty REAL DEFAULT 0.0,
-            dnp_weight REAL DEFAULT 1.0,
+            sale_start_weight REAL DEFAULT 1.0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         ''')
@@ -74,7 +74,7 @@ def init_db():
                 orders_gross_weight,
                 orders_net_weight,
                 discount_penalty,
-                dnp_weight
+                sale_start_weight
             ) VALUES (1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 1.0)
             ''')
         

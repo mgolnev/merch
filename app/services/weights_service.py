@@ -25,7 +25,7 @@ def update_weights(weight_data: Dict[str, float]) -> Tuple[bool, str]:
                 orders_gross_weight,
                 orders_net_weight,
                 discount_penalty,
-                dnp_weight
+                sale_start_weight
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """
             
@@ -37,7 +37,7 @@ def update_weights(weight_data: Dict[str, float]) -> Tuple[bool, str]:
                 weight_data.get('orders_gross_weight', 1.0),
                 weight_data.get('orders_net_weight', 1.0),
                 weight_data.get('discount_penalty', 0.0),
-                weight_data.get('dnp_weight', 1.0)
+                weight_data.get('sale_start_weight', 1.0)
             ))
             
             conn.commit()
@@ -61,7 +61,7 @@ def reset_weights() -> Tuple[bool, str]:
                 orders_gross_weight,
                 orders_net_weight,
                 discount_penalty,
-                dnp_weight
+                sale_start_weight
             ) VALUES (1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 1.0)
             """
             

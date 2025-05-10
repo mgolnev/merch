@@ -3,6 +3,7 @@ from app.utils.query_builder import QueryBuilder
 from app.utils.validation import ProductFilters
 from typing import List, Dict, Any
 import json
+from datetime import datetime
 
 def calculate_score(product, weights):
     """Расчет скоринга для продукта"""
@@ -40,6 +41,25 @@ def calculate_score(product, weights):
     # Штраф за скидку (чем больше скидка, тем больше штраф)
     discount_penalty = weights_dict.get('discount_penalty', 0.0)
     score -= discount * discount_penalty if discount_penalty > 0 else 0
+    
+    # Бонус за новизну товара (sale_start_date)
+    sale_start_weight = weights_dict.get('sale_start_weight', 1.0)
+    sale_start_date = product.get('sale_start_date')
+    if sale_start_date:
+        try:
+            start_date = datetime.strptime(sale_start_date, "%Y-%m-%d")
+            days_since_start = (datetime.now() - start_date).days
+            # Если товар только поступил или поступит — максимальный бонус
+            if days_since_start <= 0:
+                sale_bonus = 1.0
+            # Если товару до 30 дней — бонус линейно убывает
+            elif days_since_start < 30:
+                sale_bonus = (30 - days_since_start) / 30
+            else:
+                sale_bonus = 0.0
+            score += sale_bonus * sale_start_weight
+        except Exception:
+            pass
     
     return score
 
@@ -88,6 +108,7 @@ def get_products(filters: ProductFilters) -> Dict[str, Any]:
         # Получаем текущие веса
         cursor.execute("SELECT * FROM weights ORDER BY id DESC LIMIT 1")
         weights = cursor.fetchone()
+        weights_dict = dict(weights)
         
         # Расчет пагинации
         offset = (filters.page - 1) * filters.per_page
@@ -102,26 +123,7 @@ def get_products(filters: ProductFilters) -> Dict[str, Any]:
             """
             cursor.execute(products_query, params)
             rows = cursor.fetchall()
-            products = []
-            for row in rows:
-                product = dict(row)
-                product['score'] = calculate_score(product, weights)
-                product['has_image'] = bool(product.get('image_url'))
-                if 'categories' in product:
-                    product['category'] = product['categories']
-                    product['categories'] = [product['categories']]
-                products.append(product)
-            # Сортируем: сначала по наличию позиции, потом по позиции, потом по скору
-            products.sort(key=lambda x: (
-                1 if x.get('position') is None else 0,
-                x.get('position') if x.get('position') is not None else 999999,
-                -x['score']
-            ))
-            # Пагинация
-            total = len(products)
-            products = products[offset:offset + filters.per_page]
         else:
-            # Для всех категорий: сортировка по скору и пагинация на Python-стороне
             products_query = f"""
                 SELECT p.*
                 FROM {from_clause}
@@ -129,18 +131,64 @@ def get_products(filters: ProductFilters) -> Dict[str, Any]:
             """
             cursor.execute(products_query, params)
             rows = cursor.fetchall()
-            products = []
-            for row in rows:
-                product = dict(row)
-                product['score'] = calculate_score(product, weights)
-                product['has_image'] = bool(product.get('image_url'))
-                if 'categories' in product:
-                    product['category'] = product['categories']
-                    product['categories'] = [product['categories']]
-                products.append(product)
-            # Сортировка по скору (по убыванию)
+        
+        # Собираем все уникальные даты старта
+        sale_dates = set()
+        for row in rows:
+            date_str = row['sale_start_date']
+            if date_str and date_str != '':
+                try:
+                    date_obj = datetime.strptime(date_str, "%d.%m.%Y")
+                except ValueError:
+                    try:
+                        date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+                    except Exception:
+                        continue
+                sale_dates.add(date_obj)
+        if not sale_dates:
+            sale_dates = {datetime(2000, 1, 1)}
+        sale_dates_sorted = sorted(sale_dates)
+        date_to_index = {d: i for i, d in enumerate(sale_dates_sorted)}
+        n = len(sale_dates_sorted)
+        sale_start_weight = weights_dict.get('sale_start_weight', 1.0)
+        def novelty_bonus(date_str):
+            if not date_str or date_str == '':
+                return sale_start_weight
+            try:
+                date_obj = datetime.strptime(date_str, "%d.%m.%Y")
+            except ValueError:
+                try:
+                    date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+                except Exception:
+                    return sale_start_weight
+            idx = date_to_index.get(date_obj)
+            if idx is None:
+                return sale_start_weight
+            return sale_start_weight * (idx + 1)
+        
+        products = []
+        for row in rows:
+            product = dict(row)
+            product['score'] = calculate_score(product, weights)
+            product['has_image'] = bool(product.get('image_url'))
+            if 'categories' in product:
+                product['category'] = product['categories']
+                product['categories'] = [product['categories']]
+            # Бонус за новизну теперь умножается на sale_start_weight
+            product['score'] += novelty_bonus(product.get('sale_start_date'))
+            products.append(product)
+        
+        # Сортировка и пагинация как раньше
+        if filters.category != 'all':
+            products.sort(key=lambda x: (
+                1 if x.get('position') is None else 0,
+                x.get('position') if x.get('position') is not None else 999999,
+                -x['score']
+            ))
+            total = len(products)
+            products = products[offset:offset + filters.per_page]
+        else:
             products.sort(key=lambda x: -x['score'])
-            # Пагинация
             total = len(products)
             products = products[offset:offset + filters.per_page]
         
