@@ -7,12 +7,28 @@ DATA_FILE = 'processed_data.xlsx'
 
 def main():
     df = pd.read_excel(DATA_FILE)
+    # --- Импорт категорий ---
+    cat_map = {}
+    for cats, ids in zip(df['categories'], df['category_ids']):
+        cats_split = [c.strip() for c in str(cats).split('||')]
+        if isinstance(ids, str):
+            try:
+                ids = ast.literal_eval(ids)
+            except Exception:
+                ids = []
+        for cat_name, cat_id in zip(cats_split, ids):
+            cat_map[cat_id] = cat_name.strip()
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
-
+    # Очищаем feed_categories
+    cur.execute('DELETE FROM feed_categories')
+    # Заливаем только реально используемые категории
+    for cat_id, cat_name in cat_map.items():
+        short_name = cat_name.split('|')[-1].strip()
+        cur.execute('INSERT INTO feed_categories (id, name, category_number) VALUES (?, ?, ?)', (cat_id, short_name, cat_id))
+    # --- Импорт товаров и связей ---
     # Получаем все sku из файла
     all_skus = set(df['sku'].astype(str))
-
     # Удаляем из products все товары, которых нет в файле
     cur.execute('SELECT sku FROM products')
     db_skus = set(row[0] for row in cur.fetchall())
@@ -21,7 +37,6 @@ def main():
         cur.executemany('DELETE FROM products WHERE sku = ?', [(sku,) for sku in to_delete])
         cur.executemany('DELETE FROM product_categories WHERE sku = ?', [(sku,) for sku in to_delete])
         # Можно добавить очистку других связанных таблиц, если нужно
-
     # Обновляем/добавляем товары
     for _, row in df.iterrows():
         sku = str(row['sku'])

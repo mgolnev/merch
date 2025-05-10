@@ -84,19 +84,19 @@ def load_feed(feed_path):
             continue
         category_ids_raw = [cat_id.text for cat_id in offer.findall('.//categoryId') if cat_id.text]
         category_chains = []
-        all_ids = set()
+        category_ids = []
         for cat_id in category_ids_raw:
             chain = []
             current = categories.get(cat_id)
             while current:
                 chain.append(current['name'])
-                all_ids.add(int(current['id']))
                 if current['parent_id']:
                     current = categories.get(current['parent_id'])
                 else:
                     break
             if chain:
                 category_chains.append(' | '.join(reversed(chain)))
+                category_ids.append(int(cat_id))
         gender = ''
         for param in offer.findall('param'):
             if param.get('name') == 'Пол':
@@ -110,7 +110,7 @@ def load_feed(feed_path):
             'image_url': offer.findtext('picture', default=''),
             'name': offer.findtext('name', default=''),
             'categories_chain': category_chains,
-            'category_ids': sorted(list(all_ids)),
+            'category_ids': category_ids,
             'url': offer.findtext('url', default='')
         }
     return feed_data

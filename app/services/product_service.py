@@ -6,11 +6,10 @@ import json
 from datetime import datetime
 
 def calculate_score(product, weights):
-    """Расчет скоринга для продукта"""
-    # Базовый скор
+    """Расчет скоринга для продукта: все веса (кроме штрафа и бонуса) — множители абсолютных метрик"""
     score = 0
-    
-    # Получаем метрики
+    weights_dict = dict(weights)
+    # Абсолютные метрики
     sessions = product.get('sessions', 0)
     views = product.get('product_views', 0)
     cart = product.get('cart_additions', 0)
@@ -18,49 +17,16 @@ def calculate_score(product, weights):
     orders_gross = product.get('orders_gross', 0)
     orders_net = product.get('orders_net', 0)
     discount = product.get('discount', 0)
-    
-    # Конверсии
-    session_to_view = views / sessions if sessions > 0 else 0
-    view_to_cart = cart / views if views > 0 else 0
-    cart_to_checkout = checkout / cart if cart > 0 else 0
-    checkout_to_order = orders_gross / checkout if checkout > 0 else 0
-    
-    # Веса из объекта weights
-    weights_dict = dict(weights)
-    
-    # Конверсионный скор (взвешенная сумма конверсий)
-    score += session_to_view * weights_dict.get('sessions_weight', 1.0)
-    score += view_to_cart * weights_dict.get('views_weight', 1.0)
-    score += cart_to_checkout * weights_dict.get('cart_weight', 1.0)
-    score += checkout_to_order * weights_dict.get('checkout_weight', 1.0)
-    
-    # Бонус за каждый заказ
+    # Веса
+    score += sessions * weights_dict.get('sessions_weight', 1.0)
+    score += views * weights_dict.get('views_weight', 1.0)
+    score += cart * weights_dict.get('cart_weight', 1.0)
+    score += checkout * weights_dict.get('checkout_weight', 1.0)
     score += orders_gross * weights_dict.get('orders_gross_weight', 1.0)
     score += orders_net * weights_dict.get('orders_net_weight', 1.0)
-    
-    # Штраф за скидку (чем больше скидка, тем больше штраф)
+    # Штраф за скидку
     discount_penalty = weights_dict.get('discount_penalty', 0.0)
     score -= discount * discount_penalty if discount_penalty > 0 else 0
-    
-    # Бонус за новизну товара (sale_start_date)
-    sale_start_weight = weights_dict.get('sale_start_weight', 1.0)
-    sale_start_date = product.get('sale_start_date')
-    if sale_start_date:
-        try:
-            start_date = datetime.strptime(sale_start_date, "%Y-%m-%d")
-            days_since_start = (datetime.now() - start_date).days
-            # Если товар только поступил или поступит — максимальный бонус
-            if days_since_start <= 0:
-                sale_bonus = 1.0
-            # Если товару до 30 дней — бонус линейно убывает
-            elif days_since_start < 30:
-                sale_bonus = (30 - days_since_start) / 30
-            else:
-                sale_bonus = 0.0
-            score += sale_bonus * sale_start_weight
-        except Exception:
-            pass
-    
     return score
 
 def get_products(filters: ProductFilters) -> Dict[str, Any]:
