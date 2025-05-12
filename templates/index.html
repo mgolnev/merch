@@ -681,40 +681,43 @@
 
         function updateCategorySelect(searchQuery = '') {
             const select = document.getElementById('categorySelect');
-            const clearButton = document.getElementById('categoryClear');
             select.innerHTML = '';
-            clearButton.classList.toggle('visible', searchQuery.length > 0);
+            // Всегда первая — 'Все категории'
             const allOption = document.createElement('option');
             allOption.value = 'all';
             allOption.textContent = 'Все категории';
             select.appendChild(allOption);
-            allCategories
-                .filter(cat => {
-                    if (!searchQuery) return true;
-                    
-                    // Если поисковый запрос состоит только из цифр
-                    if (/^\d+$/.test(searchQuery)) {
-                        return cat.category_number && String(cat.category_number) === searchQuery;
-                    }
-                    
-                    // Для текстового поиска используем включение в
-                    return (cat.name && cat.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                           (cat.category_number && String(cat.category_number).includes(searchQuery));
-                })
-                .forEach(category => {
-                    const option = document.createElement('option');
-                    option.value = category.id;
-                    option.dataset.id = category.id;
-                    option.textContent = `${category.id} – ${category.name}`;
-                    select.appendChild(option);
-                });
-            const searchInput = document.getElementById('categorySearch');
-            if (searchQuery || document.activeElement === searchInput) {
-                select.size = Math.min(10, select.options.length);
-                select.classList.add('show');
+            
+            // Фильтруем категории
+            let filtered = [];
+            if (!searchQuery) {
+                filtered = allCategories;
+            } else if (/^\d+$/.test(searchQuery)) {
+                // Если введено только число - ищем точное совпадение по id
+                filtered = allCategories.filter(cat => String(cat.id) === searchQuery);
             } else {
+                // Иначе ищем по названию
+                filtered = allCategories.filter(cat =>
+                    cat.name && cat.name.toLowerCase().includes(searchQuery.toLowerCase())
+                );
+            }
+            
+            // Добавляем совпадения
+            filtered.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category.id;
+                option.dataset.id = category.id;
+                option.textContent = `${category.id} – ${category.name}`;
+                select.appendChild(option);
+            });
+
+            // Размер выпадающего списка
+            if (filtered.length === 0) {
                 select.size = 1;
                 select.classList.remove('show');
+            } else {
+                select.size = Math.min(10, select.options.length);
+                select.classList.add('show');
             }
         }
 
