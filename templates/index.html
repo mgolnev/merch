@@ -10,6 +10,7 @@
     <style>
         body {
             background-color: #f8f9fa;
+            margin-bottom: 100px;
         }
         .container {
             max-width: 1400px;
@@ -598,10 +599,10 @@
                             <option value="all">Все категории</option>
                         </select>
                         <div class="category-buttons mt-2">
-                            <button id="saveCategoryOrder" style="display: none;" class="btn btn-primary">
+                            <button id="saveCategoryOrder" class="btn btn-primary">
                                 <i class="bi bi-save"></i> Сохранить порядок
                             </button>
-                            <button id="exportCategory" style="display: none;" class="btn btn-success">
+                            <button id="exportCategory" class="btn btn-success">
                                 <i class="bi bi-download"></i> Выгрузить в CSV
                             </button>
                         </div>
@@ -957,12 +958,11 @@
                     pagination.style.pointerEvents = 'auto';
                     pagination.style.opacity = '1';
                     
-                    // Показываем или скрываем кнопки
+                    // Показываем кнопки для всех категорий (включая "Все категории")
                     const saveCategoryOrderBtn = document.getElementById('saveCategoryOrder');
                     const exportCategoryBtn = document.getElementById('exportCategory');
-                    const showButtons = categoryId !== 'all';
-                    saveCategoryOrderBtn.style.display = showButtons ? 'inline-block' : 'none';
-                    exportCategoryBtn.style.display = showButtons ? 'inline-block' : 'none';
+                    saveCategoryOrderBtn.style.display = 'inline-block';
+                    exportCategoryBtn.style.display = 'inline-block';
                 })
                 .catch(error => {
                     console.error('Error:', error);
@@ -1018,7 +1018,12 @@
             const categorySelect = document.getElementById('categorySelect');
             const selectedOption = categorySelect.options[categorySelect.selectedIndex];
             const categoryId = selectedOption.value;
-            if (categoryId === 'all') return;
+
+            if (categoryId === 'all') {
+                // Сохранение глобального порядка для всех товаров
+                await saveGlobalOrder();
+                return;
+            }
 
             // Получаем все товары категории
             const response = await fetch(`/api/products?category=${categoryId}&page=all&hide_no_price=true&search=&gender=all&per_page=5000`);
@@ -1067,6 +1072,58 @@
             } catch (error) {
                 console.error('Error:', error);
                 alert('Произошла ошибка при сохранении порядка категории');
+            }
+        }
+
+        // Функция для сохранения глобального порядка всех товаров
+        async function saveGlobalOrder() {
+            // Получаем все товары
+            const response = await fetch(`/api/products?category=all&page=all&hide_no_price=true&search=&gender=all&per_page=5000`);
+            const data = await response.json();
+            const allProducts = data.products;
+
+            // Получаем порядок после drag-and-drop на текущей странице
+            const draggedSkus = Array.from(document.querySelectorAll('.product-card .sku')).map(el =>
+                el.textContent.trim().replace(/^SKU: /, '')
+            );
+
+            // Формируем итоговый массив: сначала drag-and-drop, потом остальные
+            const draggedSet = new Set(draggedSkus);
+            const positions = [];
+
+            // Сначала отсортированные на странице
+            draggedSkus.forEach((sku, idx) => {
+                positions.push({ sku, position: idx + 1 });
+            });
+
+            // Потом остальные товары
+            let pos = draggedSkus.length + 1;
+            allProducts.forEach(product => {
+                if (!draggedSet.has(product.sku)) {
+                    positions.push({ sku: product.sku, position: pos++ });
+                }
+            });
+
+            // Отправляем на сервер
+            try {
+                const response = await fetch('/api/global_order_bulk', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(positions)
+                });
+
+                if (response.ok) {
+                    alert('Глобальный порядок всех товаров успешно сохранен');
+                    loadProducts(currentPage);
+                } else {
+                    const data = await response.json();
+                    alert(data.message || 'Ошибка при сохранении глобального порядка');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Произошла ошибка при сохранении глобального порядка');
             }
         }
         // ... existing code ...
@@ -1135,10 +1192,12 @@
             const categorySelect = document.getElementById('categorySelect');
             const selectedOption = categorySelect.options[categorySelect.selectedIndex];
             if (selectedOption.value === 'all') {
-                alert('Пожалуйста, выберите категорию для выгрузки');
-                return;
+                // Экспорт всех товаров
+                window.location.href = '/api/export_all_products';
+            } else {
+                // Экспорт конкретной категории
+                window.location.href = `/api/export_category/${selectedOption.dataset.id}`;
             }
-            window.location.href = `/api/export_category/${selectedOption.dataset.id}`;
         });
 
         // Добавляю функцию для показа/скрытия категорий

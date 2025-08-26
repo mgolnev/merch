@@ -2,11 +2,14 @@ import pandas as pd
 import xml.etree.ElementTree as ET
 import numpy as np
 import sqlite3
+import requests
+import tempfile
+import os
 
 # Пути к файлам
 DATA_FILE = 'data.xlsx'
 DNP_FILE = 'dnp.xlsx'
-FEED_FILE = 'feed.xml'
+FEED_URL = 'https://storage-cdn9.gloria-jeans.ru/files/feeds/master-feed-cc-central.xml'
 DB_FILE = 'merchandise.db'
 OUTPUT_FILE = 'processed_data.xlsx'
 
@@ -115,55 +118,75 @@ def load_feed(feed_path):
         }
     return feed_data
 
+def download_feed(url):
+    print('Скачивание фида...')
+    response = requests.get(url)
+    response.raise_for_status()  # Проверка на ошибки HTTP
+    
+    # Создаем временный файл
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.xml')
+    temp_file.write(response.content)
+    temp_file.close()
+    
+    print('Фид успешно скачан')
+    return temp_file.name
+
 # === 3. Основная обработка ===
 def main():
     print('Загрузка и обработка Excel...')
     df = load_and_prepare_excel(DATA_FILE)
     print('Загрузка дат начала продаж из dnp.xlsx...')
     sale_start_map = load_sale_start_dates(DNP_FILE)
-    print('Загрузка данных из фида...')
-    feed_data = load_feed(FEED_FILE)
-    # ВРЕМЕННЫЙ ОТЛАДОЧНЫЙ ВЫВОД
-    print('DEBUG:', 'GKT027834-1', feed_data.get('GKT027834-1', {}))
-    print('Объединение данных...')
-    df['price'] = df['Артикул'].map(lambda x: feed_data.get(x, {}).get('price', 0))
-    df['oldprice'] = df['Артикул'].map(lambda x: feed_data.get(x, {}).get('oldprice', 0))
-    df['discount'] = df.apply(
-        lambda row: round((1 - float(row['price'])/float(row['oldprice']))*100, 2) if float(row['oldprice']) > 0 else 0,
-        axis=1
-    )
-    df['gender'] = df['Артикул'].map(lambda x: feed_data.get(x, {}).get('gender', ''))
-    df['image_url'] = df['Артикул'].map(lambda x: feed_data.get(x, {}).get('image_url', ''))
-    # --- Фильтрация: убираем товары без изображения ---
-    df = df[df['image_url'].astype(str).str.strip() != '']
-    # --- Переименование столбцов ---
-    column_rename = {
-        'Артикул': 'sku',
-        'Название товара': 'name',
-        'Сессии': 'sessions',
-        'Карточка товара': 'product_views',
-        'Добавление в корзину': 'cart_additions',
-        'Начало чекаута': 'checkout_starts',
-        'Заказы (gross)': 'orders_gross',
-        'Заказы (net)': 'orders_net',
-        'Выручка с НДС': 'revenue_vat',
-        'Выручка без НДС (net)': 'revenue_net',
-    }
-    df = df.rename(columns=column_rename)
-    # --- categories теперь содержит все цепочки категорий (через || если их несколько) ---
-    df['categories'] = df['sku'].map(lambda x: ' || '.join(feed_data.get(x, {}).get('categories_chain', [])))
-    # --- Добавляем category_ids ---
-    df['category_ids'] = df['sku'].map(lambda x: feed_data.get(x, {}).get('category_ids', []))
-    # --- Добавляем sale_start_date ---
-    df['sale_start_date'] = df['sku'].map(lambda x: sale_start_map.get(x, '01.01.2000'))
-    # --- Если sale_start_date равен '-', заменяем на 01.01.2000 ---
-    df['sale_start_date'] = df['sale_start_date'].replace('-', '01.01.2000')
-    # --- Добавляем url ---
-    df['url'] = df['sku'].map(lambda x: feed_data.get(x, {}).get('url', ''))
-    # --- Сохраняем результат ---
-    df.to_excel(OUTPUT_FILE, index=False)
-    print(f'Файл {OUTPUT_FILE} успешно создан!')
-    print(df.head())
+    
+    # Скачиваем фид
+    feed_path = download_feed(FEED_URL)
+    try:
+        print('Загрузка данных из фида...')
+        feed_data = load_feed(feed_path)
+        # ВРЕМЕННЫЙ ОТЛАДОЧНЫЙ ВЫВОД
+        print('DEBUG:', 'GKT027834-1', feed_data.get('GKT027834-1', {}))
+        print('Объединение данных...')
+        df['price'] = df['Артикул'].map(lambda x: feed_data.get(x, {}).get('price', 0))
+        df['oldprice'] = df['Артикул'].map(lambda x: feed_data.get(x, {}).get('oldprice', 0))
+        df['discount'] = df.apply(
+            lambda row: round((1 - float(row['price'])/float(row['oldprice']))*100, 2) if float(row['oldprice']) > 0 else 0,
+            axis=1
+        )
+        df['gender'] = df['Артикул'].map(lambda x: feed_data.get(x, {}).get('gender', ''))
+        df['image_url'] = df['Артикул'].map(lambda x: feed_data.get(x, {}).get('image_url', ''))
+        # --- Фильтрация: убираем товары без изображения ---
+        df = df[df['image_url'].astype(str).str.strip() != '']
+        # --- Переименование столбцов ---
+        column_rename = {
+            'Артикул': 'sku',
+            'Название товара': 'name',
+            'Сессии': 'sessions',
+            'Карточка товара': 'product_views',
+            'Добавление в корзину': 'cart_additions',
+            'Начало чекаута': 'checkout_starts',
+            'Заказы (gross)': 'orders_gross',
+            'Заказы (net)': 'orders_net',
+            'Выручка с НДС': 'revenue_vat',
+            'Выручка без НДС (net)': 'revenue_net',
+        }
+        df = df.rename(columns=column_rename)
+        # --- categories теперь содержит все цепочки категорий (через || если их несколько) ---
+        df['categories'] = df['sku'].map(lambda x: ' || '.join(feed_data.get(x, {}).get('categories_chain', [])))
+        # --- Добавляем category_ids ---
+        df['category_ids'] = df['sku'].map(lambda x: feed_data.get(x, {}).get('category_ids', []))
+        # --- Добавляем sale_start_date ---
+        df['sale_start_date'] = df['sku'].map(lambda x: sale_start_map.get(x, '01.01.2000'))
+        # --- Если sale_start_date равен '-', заменяем на 01.01.2000 ---
+        df['sale_start_date'] = df['sale_start_date'].replace('-', '01.01.2000')
+        # --- Добавляем url ---
+        df['url'] = df['sku'].map(lambda x: feed_data.get(x, {}).get('url', ''))
+        # --- Сохраняем результат ---
+        df.to_excel(OUTPUT_FILE, index=False)
+        print(f'Файл {OUTPUT_FILE} успешно создан!')
+        print(df.head())
+    finally:
+        # Удаляем временный файл
+        os.unlink(feed_path)
 
 if __name__ == "__main__":
     main() 

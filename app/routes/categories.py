@@ -172,4 +172,125 @@ def update_category_order_bulk():
             
         return jsonify({"status": "success"})
     except Exception as e:
-        return jsonify({"error": f"Ошибка при обновлении порядка: {str(e)}"}), 500 
+        return jsonify({"error": f"Ошибка при обновлении порядка: {str(e)}"}), 500
+
+@categories_bp.route('/api/global_order_bulk', methods=['POST'])
+def update_global_order_bulk():
+    """API для массового обновления глобального порядка всех товаров"""
+    try:
+        data = request.json
+        if not isinstance(data, list):
+            return jsonify({"error": "Ожидается массив позиций"}), 400
+            
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Создаем таблицу для глобального порядка, если её нет
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS global_product_order (
+                    sku TEXT PRIMARY KEY,
+                    position INTEGER NOT NULL
+                )
+            ''')
+            
+            for position in data:
+                sku = position.get('sku')
+                pos = position.get('position')
+                
+                if not all([sku, pos is not None]):
+                    return jsonify({"error": "Неверный формат данных"}), 400
+                    
+                cursor.execute('''
+                    INSERT OR REPLACE INTO global_product_order (sku, position)
+                    VALUES (?, ?)
+                ''', (sku, pos))
+                
+            conn.commit()
+            
+        return jsonify({"status": "success"})
+    except Exception as e:
+        return jsonify({"error": f"Ошибка при обновлении глобального порядка: {str(e)}"}), 500
+
+@categories_bp.route('/api/export_all_products')
+def export_all_products():
+    """API для экспорта всех товаров в CSV формат"""
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Получаем все товары с их глобальными позициями
+            cursor.execute('''
+                SELECT 
+                    p.sku,
+                    p.name,
+                    p.price,
+                    p.oldprice,
+                    p.discount,
+                    p.gender,
+                    p.image_url,
+                    p.url,
+                    p.sessions,
+                    p.product_views,
+                    p.cart_additions,
+                    p.checkout_starts,
+                    p.orders_gross,
+                    p.orders_net,
+                    p.revenue_vat,
+                    p.revenue_net,
+                    p.sale_start_date,
+                    p.categories,
+                    gpo.position as global_position
+                FROM products p
+                LEFT JOIN global_product_order gpo ON p.sku = gpo.sku
+                ORDER BY 
+                    CASE WHEN gpo.position IS NOT NULL THEN 1 ELSE 2 END,
+                    gpo.position,
+                    p.sku
+            ''')
+            products = cursor.fetchall()
+            
+        # Создаем CSV в памяти
+        output = io.StringIO()
+        writer = csv.writer(output, delimiter=';')
+        
+        # Заголовки
+        writer.writerow([
+            'sku', 'name', 'price', 'oldprice', 'discount', 'gender', 
+            'image_url', 'url', 'sessions', 'product_views', 'cart_additions',
+            'checkout_starts', 'orders_gross', 'orders_net', 'revenue_vat',
+            'revenue_net', 'sale_start_date', 'categories', 'global_position'
+        ])
+        
+        # Данные
+        for product in products:
+            writer.writerow([
+                product['sku'],
+                product['name'],
+                product['price'],
+                product['oldprice'],
+                product['discount'],
+                product['gender'],
+                product['image_url'],
+                product['url'],
+                product['sessions'],
+                product['product_views'],
+                product['cart_additions'],
+                product['checkout_starts'],
+                product['orders_gross'],
+                product['orders_net'],
+                product['revenue_vat'],
+                product['revenue_net'],
+                product['sale_start_date'],
+                product['categories'],
+                product['global_position'] if product['global_position'] is not None else ''
+            ])
+            
+        output.seek(0)
+        return send_file(
+            io.BytesIO(output.getvalue().encode('utf-8')),
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name='all_products_export.csv'
+        )
+    except Exception as e:
+        return jsonify({"error": f"Ошибка при экспорте всех товаров: {str(e)}"}), 500 

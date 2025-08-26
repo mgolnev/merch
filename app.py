@@ -459,8 +459,58 @@ def get_products():
         
         # --- Сортировка ---
         if category == 'all':
-            # Без сортировки и лимита в SQL
-            cursor.execute(query, params)
+            # Получаем все товары с глобальным порядком
+            query_with_global = '''
+                WITH ProductScores AS (
+                    SELECT 
+                        p.sku,
+                        p.name,
+                        p.price,
+                        p.oldprice,
+                        p.discount,
+                        p.gender,
+                        p.image_url,
+                        p.sale_start_date,
+                        p.available,
+                        COALESCE(pm.sessions, 0) as sessions,
+                        COALESCE(pm.product_views, 0) as product_views,
+                        COALESCE(pm.cart_additions, 0) as cart_additions,
+                        COALESCE(pm.checkout_starts, 0) as checkout_starts,
+                        COALESCE(pm.orders_gross, 0) as orders_gross,
+                        COALESCE(pm.orders_net, 0) as orders_net,
+                        CASE 
+                            WHEN gpo.position IS NOT NULL THEN 1
+                            ELSE 2
+                        END as has_global_position,
+                        COALESCE(gpo.position, 999999) as global_position,
+                        GROUP_CONCAT(DISTINCT fc.name) as category_names,
+                        GROUP_CONCAT(DISTINCT fc.category_number) as category_numbers,
+                        p.url
+                    FROM products p 
+                    LEFT JOIN product_metrics pm ON p.sku = pm.sku 
+                    LEFT JOIN product_categories pc ON p.sku = pc.sku
+                    LEFT JOIN feed_categories fc ON pc.category_id = fc.id
+                    LEFT JOIN global_product_order gpo ON p.sku = gpo.sku
+                    WHERE 1=1
+            '''
+            global_params = []
+            if hide_no_price:
+                query_with_global += ' AND p.price > 0'
+                # global_params уже пустой, так как hide_no_price уже обработан выше
+            if search:
+                query_with_global += ' AND (p.sku LIKE ? OR p.name LIKE ?)'
+                search_param = f'%{search}%'
+                global_params.extend([search_param, search_param])
+            if gender != 'all':
+                query_with_global += ' AND p.gender = ?'
+                global_params.append(gender)
+            query_with_global += '''
+                    GROUP BY p.sku
+                )
+                SELECT * FROM ProductScores
+            '''
+            
+            cursor.execute(query_with_global, global_params)
             products = cursor.fetchall()
             result = []
             for product in products:
@@ -482,11 +532,26 @@ def get_products():
                     'orders_net': product['orders_net'],
                     'categories': product['category_names'].split(',') if product['category_names'] else [],
                     'category_numbers': [int(x) for x in product['category_numbers'].split(',')] if product['category_numbers'] else [],
+                    'has_global_position': product['has_global_position'],
+                    'global_position': product['global_position'],
                     'url': product['url']
                 }
                 product_dict['score'] = calculate_score(product_dict, weights)
                 result.append(product_dict)
-            result.sort(key=lambda x: x['score'], reverse=True)
+            
+            # Сортируем: сначала с глобальной позицией, потом по скору
+            with_global_position = []
+            without_global_position = []
+            for product in result:
+                if product['has_global_position'] == 1:
+                    with_global_position.append(product)
+                else:
+                    without_global_position.append(product)
+            
+            with_global_position.sort(key=lambda x: x['global_position'])
+            without_global_position.sort(key=lambda x: x['score'], reverse=True)
+            result = with_global_position + without_global_position
+            
             start = (page - 1) * per_page
             end = start + per_page
             result = result[start:end]
