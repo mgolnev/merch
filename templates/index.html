@@ -54,25 +54,27 @@
         .product-image {
             width: 100%;
             height: 100%;
-            object-fit: cover;
+                        object-fit: cover;
             padding: 0;
         }
+        
         .metrics {
-            font-size: 0.9em;
+            font-size: 0.85em;
             color: #666;
             background-color: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 10px;
+            padding: 0.75rem;
+            border-radius: 6px;
+            margin-top: 0.5rem;
         }
         .metrics p {
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.25rem;
             display: flex;
             justify-content: space-between;
         }
         .metrics span {
             font-weight: 500;
         }
+        
         .pagination {
             margin: 2rem 0;
         }
@@ -108,8 +110,8 @@
         .price-block {
             display: flex;
             align-items: baseline;
-            gap: 10px;
-            margin-bottom: 1rem;
+            gap: 8px;
+            margin-bottom: 0.75rem;
             flex-wrap: wrap;
         }
         .current-price {
@@ -306,6 +308,10 @@
             background-color: white;
             padding: 1.5rem 0;
             margin-bottom: 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
         
         .header .btn {
@@ -326,22 +332,29 @@
         }
         .score-badge {
             position: absolute;
-            top: 10px;
-            right: 10px;
-            background-color: rgba(33, 37, 41, 0.85);
-            color: white;
-            padding: 0.5rem 0.75rem;
-            border-radius: 8px;
-            font-size: 0.875rem;
-            z-index: 1;
-            backdrop-filter: blur(4px);
+            top: 8px;
+            right: 8px;
+            background: transparent;
+            color: rgb(60 60 60 / 90%);
+            padding: 0.2em 0.5em;
+            font-size: 0.85rem;
+            z-index: 2;
+            text-align: right;
+            text-shadow: 1px 1px 2px rgb(255 255 255 / 70%);
+            transition: all 0.2s ease;
+        }
+        
+        .score-badge:hover {
+            color: rgb(60 60 60 / 100%);
+            text-shadow: 1px 1px 3px rgb(255 255 255 / 90%);
+            transform: translateY(-1px);
         }
         .score-value {
             font-weight: bold;
             color: #ffc107;
         }
         .card-body {
-            padding: 1.25rem;
+            padding: 1rem;
         }
         .form-check {
             margin-bottom: 0;
@@ -548,11 +561,11 @@
         
         .fashion-mode .card-body,
         .fashion-mode .product-header,
-        .fashion-mode .metrics,
         .fashion-mode .price-block,
         .fashion-mode .availability,
         .fashion-mode .sku,
-        .fashion-mode .score-badge {
+        .fashion-mode .score-badge,
+        .fashion-mode .metrics {
             display: none !important;
         }
         
@@ -626,6 +639,75 @@
         .fashion-mode .filters-container select option {
             background: white !important;
             color: #333 !important;
+        }
+        
+        .fashion-mode .category-select {
+            max-height: 300px !important;
+            overflow-y: auto !important;
+            z-index: 9999 !important;
+            background: white !important;
+            border: 2px solid rgba(0,0,0,0.3) !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+            position: absolute !important;
+            top: 100% !important;
+            left: 0 !important;
+            right: 0 !important;
+            width: 100% !important;
+        }
+        
+        .fashion-mode .category-select:focus {
+            max-height: 300px !important;
+            overflow-y: auto !important;
+            border-color: rgba(0,0,0,0.5) !important;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.2) !important;
+        }
+        
+        .fashion-mode .category-select option {
+            padding: 8px 12px !important;
+            background: white !important;
+            color: #333 !important;
+            border-bottom: 1px solid #f0f0f0 !important;
+        }
+        
+        .fashion-mode .category-select option:hover {
+            background: #f8f9fa !important;
+        }
+        
+        /* Исправляем z-index для всех элементов в фэшн-режиме */
+        .fashion-mode .product-card {
+            z-index: 1 !important;
+        }
+        
+        .fashion-mode .filters-container {
+            z-index: 100 !important;
+            position: relative !important;
+        }
+        
+        .fashion-mode .filter-section {
+            position: relative !important;
+            z-index: 150 !important;
+        }
+        
+        .fashion-mode .category-search-container {
+            position: relative !important;
+            z-index: 150 !important;
+        }
+        
+        .fashion-mode .filter-section:has(.category-select) {
+            position: relative !important;
+        }
+        
+        .fashion-mode .category-search-container {
+            position: relative !important;
+            z-index: 150 !important;
+        }
+        
+        .fashion-mode .header {
+            z-index: 200 !important;
+            position: sticky !important;
+            top: 0 !important;
+            background: rgba(255,255,255,0.95) !important;
+            backdrop-filter: blur(10px) !important;
         }
         
 
@@ -1089,16 +1171,12 @@
                 imageHtml = `<div class=\"image-container mb-2 d-flex align-items-center justify-content-center\" style=\"background:#e9ecef;min-height:180px;\"><i class=\"bi bi-image\" style=\"font-size:3rem;color:#adb5bd;\"></i></div>`;
             }
             // Скор и позиция
-            const scoreHtml = `<span class=\"score-badge position-absolute top-0 end-0 m-2\" title=\"Скор\" style=\"background:rgba(33,37,41,0.85);color:#ffc107;padding:0.3em 0.7em;border-radius:8px;font-size:1.1rem;z-index:2;\">★ ${product.score ?? 0}</span>`;
+                        const scoreHtml = `<span class=\"score-badge position-absolute top-0 end-0 m-2\" title=\"Скор\" style=\"background:transparent;color:rgb(60 60 60 / 90%);padding:0.2em 0.5em;font-size:0.85rem;z-index:2;text-align:right;text-shadow:1px 1px 2px rgb(255 255 255 / 70%);\">★ ${product.score ?? 0}</span>`;
             const positionHtml = product.position && product.position !== 999999 ? `<span class=\"badge bg-info ms-2\" title=\"Позиция в категории\">#${product.position}</span>` : '';
-            // Метрики
+            // Метрики (только важные)
             const metricsHtml = `
-                <div class=\"metrics mt-2\" style=\"background:#f8f9fa;padding:1em;border-radius:12px;\">
-                    <div style=\"display:flex;flex-direction:column;gap:0.3em;\">
-                        <div style=\"display:flex;justify-content:space-between;\"><span>Сессии:</span><span>${product.sessions ?? 0}</span></div>
-                        <div style=\"display:flex;justify-content:space-between;\"><span>Просмотры:</span><span>${product.product_views ?? 0}</span></div>
-                        <div style=\"display:flex;justify-content:space-between;\"><span>В корзину:</span><span>${product.cart_additions ?? 0}</span></div>
-                        <div style=\"display:flex;justify-content:space-between;\"><span>Оформления:</span><span>${product.checkout_starts ?? 0}</span></div>
+                <div class=\"metrics mt-2\" style=\"background:#f8f9fa;padding:0.75em;border-radius:8px;\">
+                    <div style=\"display:flex;flex-direction:column;gap:0.25em;\">
                         <div style=\"display:flex;justify-content:space-between;\"><span>Заказы:</span><span>${product.orders_gross ?? 0}</span></div>
                         <div style=\"display:flex;justify-content:space-between;\"><span>Net:</span><span>${product.orders_net ?? 0}</span></div>
                         ${product.sale_start_date ? `<div style=\"display:flex;justify-content:space-between;\"><span>Старт продаж:</span><span>${product.sale_start_date}</span></div>` : ''}
@@ -1113,11 +1191,11 @@
                     ${scoreHtml}
                     ${imageHtml}
                     <div class=\"card-body\">
-                        <div class=\"d-flex justify-content-between align-items-center mb-2\">
+                        <div class=\"d-flex justify-content-between align-items-center mb-1\">
                             <span class=\"sku\">SKU: ${product.sku}</span>
                             <span class=\"order-number\">#${orderNumber}</span>
                         </div>
-                        <div class=\"d-flex align-items-center mb-2\">
+                        <div class=\"d-flex align-items-center mb-1\">
                             ${positionHtml}
                             <span class=\"ms-auto\">${categoriesToggleHtml}</span>
                         </div>
@@ -1440,6 +1518,44 @@
                 if (pagination) {
                     pagination.style.transition = 'all 0.3s ease';
                 }
+            }
+        });
+        
+        // Добавляем обработчик для select категорий в фэшн-режиме
+        document.getElementById('categorySelect').addEventListener('focus', function() {
+            if (document.body.classList.contains('fashion-mode')) {
+                this.style.maxHeight = '300px';
+                this.style.overflowY = 'auto';
+                this.style.zIndex = '9999';
+                this.style.position = 'absolute';
+                this.style.top = '100%';
+                this.style.left = '0';
+                this.style.right = '0';
+                this.style.width = '100%';
+                this.style.background = 'white';
+                this.style.border = '2px solid rgba(0,0,0,0.3)';
+                this.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+            }
+        });
+        
+        document.getElementById('categorySelect').addEventListener('blur', function() {
+            if (document.body.classList.contains('fashion-mode')) {
+                // Не сбрасываем стили сразу, чтобы пользователь мог выбрать опцию
+                setTimeout(() => {
+                    if (!this.matches(':focus')) {
+                        this.style.maxHeight = '';
+                        this.style.overflowY = '';
+                        this.style.zIndex = '';
+                        this.style.position = '';
+                        this.style.top = '';
+                        this.style.left = '';
+                        this.style.right = '';
+                        this.style.width = '';
+                        this.style.background = '';
+                        this.style.border = '';
+                        this.style.boxShadow = '';
+                    }
+                }, 300);
             }
         });
 
