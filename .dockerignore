@@ -37,14 +37,16 @@ data/
 *.csv
 weights_backup.csv
 
-# Scripts (not needed in production)
+# Scripts (keep essential ones)
 scripts/
 add_category_ids_to_processed_data.py
 import_feed_categories_from_processed_data.py
 import_product_category_links.py
-build_processed_data.py
-import_processed_data_to_db.py
 import_feed_categories.py
+
+# Keep essential scripts for data processing
+# build_processed_data.py
+# import_processed_data_to_db.py
 
 # SQL files
 *.sql
@@ -57,6 +59,7 @@ conftest.py
 # Documentation
 README.md
 docker-deploy.md
+DEPLOYMENT.md
 
 # Workspace files
 *.code-workspace
@@ -66,3 +69,6 @@ app.db
 
 # Development override
 docker-compose.override.yml
+
+# Deployment scripts (keep for convenience)
+# deploy.sh
