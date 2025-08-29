@@ -61,8 +61,6 @@ def load_feed(feed_path):
     root = tree.getroot()
     feed_data = {}
     categories = {}
-    
-    # Сначала загружаем все категории
     for category in root.findall('.//category'):
         cat_id = category.get('id')
         if cat_id:
@@ -73,22 +71,7 @@ def load_feed(feed_path):
                 'name': name,
                 'parent_id': parent_id
             }
-    
-    # Функция для получения всех ID категорий в иерархии
-    def get_all_category_ids(cat_id):
-        result = []
-        current = categories.get(cat_id)
-        while current:
-            result.append(int(current['id']))
-            if current['parent_id']:
-                current = categories.get(current['parent_id'])
-            else:
-                break
-        # Возвращаем в правильном порядке: от корня к листьям
-        return list(reversed(result))
-    
-    # Функция для получения всех названий категорий в иерархии
-    def get_all_category_names(cat_id):
+    def get_all_categories(cat_id):
         result = []
         current = categories.get(cat_id)
         while current:
@@ -97,37 +80,31 @@ def load_feed(feed_path):
                 current = categories.get(current['parent_id'])
             else:
                 break
-        # Возвращаем в правильном порядке: от корня к листьям
-        return list(reversed(result))
-    
+        return result
     for offer in root.findall('.//offer'):
         sku = offer.get('id')
         if not sku:
             continue
-        
         category_ids_raw = [cat_id.text for cat_id in offer.findall('.//categoryId') if cat_id.text]
         category_chains = []
-        all_category_ids = []
-        
+        category_ids = []
         for cat_id in category_ids_raw:
-            # Получаем все названия категорий в иерархии
-            chain = get_all_category_names(cat_id)
+            chain = []
+            current = categories.get(cat_id)
+            while current:
+                chain.append(current['name'])
+                if current['parent_id']:
+                    current = categories.get(current['parent_id'])
+                else:
+                    break
             if chain:
-                category_chains.append(' | '.join(chain))
-            
-            # Получаем все ID категорий в иерархии
-            hierarchy_ids = get_all_category_ids(cat_id)
-            all_category_ids.extend(hierarchy_ids)
-        
-        # Убираем дубликаты и сортируем (от корня к листьям)
-        all_category_ids = list(dict.fromkeys(all_category_ids))
-        
+                category_chains.append(' | '.join(reversed(chain)))
+                category_ids.append(int(cat_id))
         gender = ''
         for param in offer.findall('param'):
             if param.get('name') == 'Пол':
                 gender = param.text or ''
                 break
-        
         feed_data[sku] = {
             'price': offer.findtext('price', default='0'),
             'oldprice': offer.findtext('oldprice', default='0'),
@@ -136,10 +113,9 @@ def load_feed(feed_path):
             'image_url': offer.findtext('picture', default=''),
             'name': offer.findtext('name', default=''),
             'categories_chain': category_chains,
-            'category_ids': all_category_ids,
+            'category_ids': category_ids,
             'url': offer.findtext('url', default='')
         }
-    
     return feed_data
 
 def download_feed(url):

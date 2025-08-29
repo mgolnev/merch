@@ -7,62 +7,28 @@ DATA_FILE = 'processed_data.xlsx'
 
 def main():
     df = pd.read_excel(DATA_FILE)
-    
-    conn = sqlite3.connect(DB_FILE)
-    cur = conn.cursor()
-    
     # --- Импорт категорий ---
-    print("Импорт категорий...")
-    cat_map = {}  # category_number -> name
-    cat_id_map = {}  # category_number -> db_id
-    
+    cat_map = {}
     for cats, ids in zip(df['categories'], df['category_ids']):
-        if pd.isna(cats) or pd.isna(ids):
-            continue
-            
         cats_split = [c.strip() for c in str(cats).split('||')]
         if isinstance(ids, str):
             try:
                 ids = ast.literal_eval(ids)
             except Exception:
                 ids = []
-        
-        # Обрабатываем каждую цепочку категорий
-        for cat_chain in cats_split:
-            cat_names = [c.strip() for c in cat_chain.split('|')]
-            if len(cat_names) != len(ids):
-                continue
-                
-            for cat_name, cat_number in zip(cat_names, ids):
-                cat_map[cat_number] = cat_name.strip()
-    
+        for cat_name, cat_id in zip(cats_split, ids):
+            cat_map[cat_id] = cat_name.strip()
+    conn = sqlite3.connect(DB_FILE)
+    cur = conn.cursor()
     # Очищаем feed_categories
     cur.execute('DELETE FROM feed_categories')
-    
-    # Заливаем категории
-    for cat_number, cat_name in cat_map.items():
-        # Определяем parent_id (если есть)
-        parent_id = None
-        # Ищем родительскую категорию по номеру
-        if cat_number in cat_id_map:
-            parent_id = cat_id_map[cat_number]
-        
-        cur.execute('''
-            INSERT INTO feed_categories (category_number, name, parent_id) 
-            VALUES (?, ?, ?)
-        ''', (cat_number, cat_name, parent_id))
-        
-        # Сохраняем mapping db_id -> category_number
-        cat_id_map[cat_number] = cur.lastrowid
-    
-    print(f"Импортировано {len(cat_map)} категорий")
-    
+    # Заливаем только реально используемые категории
+    for cat_id, cat_name in cat_map.items():
+        short_name = cat_name.split('|')[-1].strip()
+        cur.execute('INSERT INTO feed_categories (id, name, category_number) VALUES (?, ?, ?)', (cat_id, short_name, cat_id))
     # --- Импорт товаров и связей ---
-    print("Импорт товаров...")
-    
     # Получаем все sku из файла
     all_skus = set(df['sku'].astype(str))
-    
     # Удаляем из products все товары, которых нет в файле
     cur.execute('SELECT sku FROM products')
     db_skus = set(row[0] for row in cur.fetchall())
@@ -70,15 +36,10 @@ def main():
     if to_delete:
         cur.executemany('DELETE FROM products WHERE sku = ?', [(sku,) for sku in to_delete])
         cur.executemany('DELETE FROM product_categories WHERE sku = ?', [(sku,) for sku in to_delete])
-        print(f"Удалено {len(to_delete)} устаревших товаров")
-    
+        # Можно добавить очистку других связанных таблиц, если нужно
     # Обновляем/добавляем товары
-    for idx, row in df.iterrows():
-        if idx % 1000 == 0:
-            print(f"Обработано {idx} товаров...")
-            
+    for _, row in df.iterrows():
         sku = str(row['sku'])
-        
         # Все поля
         name = str(row.get('name', ''))
         price = float(row.get('price', 0))
@@ -95,7 +56,6 @@ def main():
         revenue_vat = float(row.get('revenue_vat', 0))
         revenue_net = float(row.get('revenue_net', 0))
         sale_start_date = row.get('sale_start_date', '01.01.2000')
-        
         # Приводим дату к строке в формате DD.MM.YYYY
         if pd.isna(sale_start_date):
             sale_start_date = '01.01.2000'
@@ -106,22 +66,12 @@ def main():
                 sale_start_date = pd.to_datetime(sale_start_date).strftime('%d.%m.%Y')
             except Exception:
                 sale_start_date = '01.01.2000'
-        
         categories = str(row.get('categories', ''))
         url = str(row.get('url', ''))
-        
-        # category_ids может быть строкой вида '[1, 2, 3]' — преобразуем
-        cat_ids = row.get('category_ids', [])
-        if isinstance(cat_ids, str):
-            try:
-                cat_ids = ast.literal_eval(cat_ids)
-            except Exception:
-                cat_ids = []
-        
         # upsert в products
         cur.execute('''
-            INSERT INTO products (sku, name, price, oldprice, discount, gender, image_url, sessions, product_views, cart_additions, checkout_starts, orders_gross, orders_net, revenue_vat, revenue_net, sale_start_date, categories, category_ids, url)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO products (sku, name, price, oldprice, discount, gender, image_url, sessions, product_views, cart_additions, checkout_starts, orders_gross, orders_net, revenue_vat, revenue_net, sale_start_date, categories, url)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(sku) DO UPDATE SET
                 name=excluded.name,
                 price=excluded.price,
@@ -139,25 +89,19 @@ def main():
                 revenue_net=excluded.revenue_net,
                 sale_start_date=excluded.sale_start_date,
                 categories=excluded.categories,
-                category_ids=excluded.category_ids,
                 url=excluded.url
-        ''', (sku, name, price, oldprice, discount, gender, image_url, sessions, product_views, cart_additions, checkout_starts, orders_gross, orders_net, revenue_vat, revenue_net, sale_start_date, categories, str(cat_ids), url))
-        
+        ''', (sku, name, price, oldprice, discount, gender, image_url, sessions, product_views, cart_additions, checkout_starts, orders_gross, orders_net, revenue_vat, revenue_net, sale_start_date, categories, url))
         # Обновляем связи с категориями
         cur.execute('DELETE FROM product_categories WHERE sku = ?', (sku,))
-        
-        # Создаем связи с категориями
-        for cat_number in cat_ids:
-            # Ищем категорию по category_number
-            cur.execute('SELECT id FROM feed_categories WHERE category_number = ?', (cat_number,))
-            result = cur.fetchone()
-            if result:
-                db_category_id = result[0]
-                cur.execute('''
-                    INSERT INTO product_categories (sku, category_id, is_primary) 
-                    VALUES (?, ?, ?)
-                ''', (sku, db_category_id, 0))  # is_primary = 0 для всех связей
-    
+        # category_ids может быть строкой вида '[1, 2, 3]' — преобразуем
+        cat_ids = row.get('category_ids', [])
+        if isinstance(cat_ids, str):
+            try:
+                cat_ids = ast.literal_eval(cat_ids)
+            except Exception:
+                cat_ids = []
+        for cat_id in cat_ids:
+            cur.execute('INSERT INTO product_categories (sku, category_id) VALUES (?, ?)', (sku, cat_id))
     conn.commit()
     conn.close()
     print('Импорт завершён!')

@@ -36,8 +36,9 @@ def get_products(filters: ProductFilters) -> Dict[str, Any]:
     
     # Применяем фильтры
     if filters.category != 'all':
+        # Фильтруем по ID категории через таблицу product_categories
         join_product_categories = True
-        query_builder.add_condition("pc.category_id = ?", filters.category)
+        query_builder.add_condition("fc.category_number = ?", filters.category)
     
     if filters.hide_no_price:
         query_builder.add_condition("p.price > 0")
@@ -47,8 +48,7 @@ def get_products(filters: ProductFilters) -> Dict[str, Any]:
     
     if filters.search:
         search_term = f"%{filters.search}%"
-        query_builder.add_condition("(p.name LIKE ? OR p.sku LIKE ?)", search_term)
-        query_builder.add_condition("(p.name LIKE ? OR p.sku LIKE ?)", search_term)
+        query_builder.add_condition("(p.name LIKE ? OR p.sku LIKE ?)", (search_term, search_term))
     
     if filters.sku:
         query_builder.add_condition("p.sku = ?", filters.sku)
@@ -60,7 +60,7 @@ def get_products(filters: ProductFilters) -> Dict[str, Any]:
         # Формируем FROM и JOIN
         from_clause = "products p"
         if join_product_categories:
-            from_clause += " JOIN product_categories pc ON p.sku = pc.sku"
+            from_clause += " JOIN product_categories pc ON p.sku = pc.sku JOIN feed_categories fc ON pc.category_id = fc.id"
         
         # Получаем общее количество товаров для пагинации
         count_query = f"""
@@ -80,23 +80,39 @@ def get_products(filters: ProductFilters) -> Dict[str, Any]:
         offset = (filters.page - 1) * filters.per_page
         
         # Получаем продукты с учетом пагинации
-        if filters.category != 'all':
-            # Получаем все товары категории без сортировки и лимита
-            products_query = f"""
-                SELECT p.*, pc.position
-                FROM {from_clause}
-                WHERE {where_clause}
-            """
-            cursor.execute(products_query, params)
-            rows = cursor.fetchall()
+        if join_product_categories:
+            # Получаем позиции только для текущей фильтруемой категории
+            current_category = None
+            for param in params:
+                if isinstance(param, str) and param.isdigit():
+                    current_category = param
+                    break
+            
+            if current_category:
+                products_query = f"""
+                    SELECT DISTINCT p.*, co.position
+                    FROM {from_clause}
+                    LEFT JOIN category_order co ON p.sku = co.sku AND co.category = ?
+                    WHERE {where_clause}
+                """
+                params_with_position = [current_category] + list(params)
+            else:
+                products_query = f"""
+                    SELECT DISTINCT p.*, NULL as position
+                    FROM {from_clause}
+                    WHERE {where_clause}
+                """
+                params_with_position = params
         else:
             products_query = f"""
                 SELECT p.*
                 FROM {from_clause}
                 WHERE {where_clause}
             """
-            cursor.execute(products_query, params)
-            rows = cursor.fetchall()
+            params_with_position = params
+        
+        cursor.execute(products_query, params_with_position)
+        rows = cursor.fetchall()
         
         # Собираем все уникальные даты старта
         sale_dates = set()
@@ -140,23 +156,35 @@ def get_products(filters: ProductFilters) -> Dict[str, Any]:
             if 'categories' in product:
                 product['category'] = product['categories']
                 product['categories'] = [product['categories']]
+            
+            # Добавляем category_ids из базы данных
+            if 'category_ids' in product:
+                # Преобразуем строку в список, если нужно
+                if isinstance(product['category_ids'], str):
+                    try:
+                        import ast
+                        product['category_ids'] = ast.literal_eval(product['category_ids'])
+                    except:
+                        product['category_ids'] = []
+            
             # Бонус за новизну теперь умножается на sale_start_weight
             product['score'] += novelty_bonus(product.get('sale_start_date'))
             products.append(product)
         
-        # Сортировка и пагинация как раньше
-        if filters.category != 'all':
+        # Сортировка и пагинация
+        if join_product_categories:
+            # При фильтрации по категории сортируем по сохраненному порядку
             products.sort(key=lambda x: (
-                1 if x.get('position') is None else 0,
-                x.get('position') if x.get('position') is not None else 999999,
-                -x['score']
+                1 if x.get('position') is None else 0,  # Товары без позиции в конец
+                x.get('position') if x.get('position') is not None else 999999,  # По позиции
+                -x['score']  # При одинаковой позиции - по скору
             ))
-            total = len(products)
-            products = products[offset:offset + filters.per_page]
         else:
+            # Без фильтра по категории - сортируем по скору
             products.sort(key=lambda x: -x['score'])
-            total = len(products)
-            products = products[offset:offset + filters.per_page]
+        
+        total = len(products)
+        products = products[offset:offset + filters.per_page]
         
         return {
             'products': products,

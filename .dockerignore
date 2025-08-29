@@ -1,33 +1,68 @@
-# Исключаем системные файлы и директории
+# Git
 .git
-.github
 .gitignore
-.idea
-.vscode
-__pycache__
+
+# Python cache
+__pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
-env/
+*.so
+
+# Virtual environments
 venv/
-.env
-.venv
-.pytest_cache
+env/
+ENV/
 
-# Данные
-*.db
-*.xlsx
-feed.xml
-data.xlsx
-processed_data.xlsx
-dnp.xlsx
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
-# Документация
-README.md
-LICENSE
-*.md
-
-# Другие исключения
+# OS files
 .DS_Store
-Thumbs.db 
+Thumbs.db
+
+# Development files
+*.log
+.env
+.env.local
+
+# Data files (keep only merchandise.db for production)
+data/
+*.xlsx
+*.csv
+weights_backup.csv
+
+# Scripts (not needed in production)
+scripts/
+add_category_ids_to_processed_data.py
+import_feed_categories_from_processed_data.py
+import_product_category_links.py
+build_processed_data.py
+import_processed_data_to_db.py
+import_feed_categories.py
+
+# SQL files
+*.sql
+
+# Test files
+tests/
+test_*.py
+conftest.py
+
+# Documentation
+README.md
+docker-deploy.md
+
+# Workspace files
+*.code-workspace
+
+# Old database files
+app.db
+
+# Development override
+docker-compose.override.yml

@@ -7,11 +7,12 @@ def get_all_categories():
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, name FROM feed_categories
+            SELECT DISTINCT category_number, name 
+            FROM feed_categories
             WHERE is_active = 1
-            ORDER BY id
+            ORDER BY category_number
         """)
-        categories = [{"id": row["id"], "name": row["name"]} for row in cursor.fetchall()]
+        categories = [{"id": row["category_number"], "name": row["name"]} for row in cursor.fetchall()]
         return categories
 
 def get_category_products(category_id: int, scored: bool = True):

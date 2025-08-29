@@ -10,7 +10,10 @@ class QueryBuilder:
         """Добавление условия в WHERE"""
         self.conditions.append(condition)
         if param is not None:
-            self.params.append(param)
+            if isinstance(param, (list, tuple)):
+                self.params.extend(param)
+            else:
+                self.params.append(param)
     
     def build(self) -> Tuple[str, List[Any]]:
         """Построение финального SQL-запроса"""

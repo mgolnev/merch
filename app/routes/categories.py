@@ -75,29 +75,26 @@ def reset_category_order():
     """API для сброса ручных позиций в категории"""
     try:
         data = request.json
-        category_id = InputValidator.validate_integer(
-            data.get('category_id'),
-            'category_id',
-            min_value=1
-        )
+        category_id = data.get('category_id')
+        
+        if not category_id:
+            return jsonify({"error": "Не указан category_id"}), 400
         
         with get_db_connection() as conn:
             cursor = conn.cursor()
+            # Удаляем все записи для данной категории из таблицы category_order
             cursor.execute('''
-                UPDATE product_categories 
-                SET position = NULL 
-                WHERE category_id = ?
+                DELETE FROM category_order 
+                WHERE category = ?
             ''', (category_id,))
             conn.commit()
             
-        return jsonify({"status": "success"})
-    except ValidationError as e:
-        return jsonify({"error": str(e)}), 400
+        return jsonify({"message": "Порядок категории успешно сброшен"})
     except Exception as e:
-        return jsonify({"error": f"Ошибка при сбросе ручных позиций: {str(e)}"}), 500
+        return jsonify({"error": f"Ошибка при сбросе порядка категории: {str(e)}"}), 500
 
-@categories_bp.route('/api/export_category/<int:category_id>')
-def export_category(category_id):
+@categories_bp.route('/api/export_category/<int:category_number>')
+def export_category(category_number):
     """API для экспорта категории в CSV формат (только sku, category_id, position)"""
     try:
         with get_db_connection() as conn:
@@ -105,33 +102,36 @@ def export_category(category_id):
             cursor.execute("""
                 SELECT id, name 
                 FROM feed_categories 
-                WHERE id = ? AND is_active = 1
-            """, (category_id,))
+                WHERE category_number = ? AND is_active = 1
+            """, (category_number,))
             category = cursor.fetchone()
             if not category:
                 return jsonify({"error": "Категория не найдена"}), 404
-            # Получаем только нужные поля
+            
+            db_category_id = category['id']
+            # Получаем товары с позициями из category_order
             cursor.execute("""
                 SELECT 
                     p.sku,
-                    pc.category_id,
-                    pc.position
+                    ? as category_number,
+                    co.position
                 FROM products p
-                LEFT JOIN product_categories pc ON p.sku = pc.sku AND pc.category_id = ?
-                WHERE pc.category_id = ?
+                JOIN product_categories pc ON p.sku = pc.sku AND pc.category_id = ?
+                LEFT JOIN category_order co ON p.sku = co.sku AND co.category = ?
                 ORDER BY 
-                    CASE WHEN pc.position IS NOT NULL THEN 1 ELSE 2 END,
-                    pc.position
-            """, (category_id, category_id))
+                    CASE WHEN co.position IS NOT NULL THEN 1 ELSE 2 END,
+                    co.position,
+                    p.sku
+            """, (category_number, db_category_id, category_number))
             products = cursor.fetchall()
         # Создаем CSV в памяти
         output = io.StringIO()
         writer = csv.writer(output, delimiter=';')
-        writer.writerow(['sku', 'category_id', 'position'])
+        writer.writerow(['sku', 'category_number', 'position'])
         for product in products:
             writer.writerow([
                 product['sku'],
-                product['category_id'],
+                product['category_number'],
                 product['position'] if product['position'] is not None else ''
             ])
         output.seek(0)
@@ -162,11 +162,11 @@ def update_category_order_bulk():
                 if not all([sku, category_id, pos is not None]):
                     return jsonify({"error": "Неверный формат данных"}), 400
                     
+                # Обновляем позицию в таблице category_order
                 cursor.execute('''
-                    UPDATE product_categories 
-                    SET position = ? 
-                    WHERE sku = ? AND category_id = ?
-                ''', (pos, sku, category_id))
+                    INSERT OR REPLACE INTO category_order (sku, category, position)
+                    VALUES (?, ?, ?)
+                ''', (sku, category_id, pos))
                 
             conn.commit()
             

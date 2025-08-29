@@ -602,6 +602,9 @@
                             <button id="saveCategoryOrder" class="btn btn-primary">
                                 <i class="bi bi-save"></i> Сохранить порядок
                             </button>
+                            <button id="resetCategoryOrder" class="btn btn-warning">
+                                <i class="bi bi-arrow-clockwise"></i> Сбросить порядок
+                            </button>
                             <button id="exportCategory" class="btn btn-success">
                                 <i class="bi bi-download"></i> Выгрузить в CSV
                             </button>
@@ -1152,8 +1155,8 @@
         loadCategories();
         loadProducts(1);
 
-        // Добавляем обработчик для кнопки сброса
-        document.getElementById('resetButton').addEventListener('click', async () => {
+        // Добавляем обработчик для кнопки сброса порядка категории
+        document.getElementById('resetCategoryOrder').addEventListener('click', async () => {
             const categorySelect = document.getElementById('categorySelect');
             const selectedOption = categorySelect.options[categorySelect.selectedIndex];
             const categoryId = selectedOption.value;
