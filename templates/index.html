@@ -42,7 +42,6 @@
             box-shadow: 0 8px 16px rgba(0,0,0,0.1);
         }
         .image-container {
-            height: 300px;
             overflow: hidden;
             background-color: #fff;
             display: flex;
@@ -438,8 +437,157 @@
         /* Стили для кнопок категорий */
         .category-buttons {
             display: flex;
-            gap: 0.75rem;
-            margin-top: 1rem;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-top: 0;
+        }
+        
+        .category-buttons .btn {
+            font-size: 0.8rem;
+            padding: 0.5rem 0.75rem;
+            white-space: nowrap;
+        }
+        
+        .category-buttons .btn i {
+            margin-right: 0.25rem;
+        }
+        
+        /* Стили для фэшн-режима */
+        .fashion-mode .product-card {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+        }
+        
+        .fashion-mode .card {
+            border: none !important;
+            box-shadow: none !important;
+            border-radius: 0 !important;
+            background: transparent !important;
+            margin: 0 !important;
+        }
+        
+        .fashion-mode .image-container {
+            border-radius: 0 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        
+        .fashion-mode .product-image {
+            border-radius: 0 !important;
+            width: 100% !important;
+            object-fit: contain !important;
+        }
+        
+        .fashion-mode .card-body,
+        .fashion-mode .product-header,
+        .fashion-mode .metrics,
+        .fashion-mode .price-block,
+        .fashion-mode .availability,
+        .fashion-mode .sku,
+        .fashion-mode .score-badge {
+            display: none !important;
+        }
+        
+        .fashion-mode .product-card {
+            transition: all 0.3s ease !important;
+        }
+        
+        .fashion-mode .product-card:hover {
+            transform: scale(1.05) !important;
+            z-index: 10 !important;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3) !important;
+        }
+        
+        .fashion-mode #productsContainer {
+            display: grid !important;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important;
+            gap: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        
+        .fashion-mode .pagination-footer {
+            position: fixed !important;
+            bottom: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            background: rgba(255,255,255,0.95) !important;
+            color: #333 !important;
+            z-index: 1000 !important;
+            border-top: 1px solid rgba(0,0,0,0.1) !important;
+        }
+        
+        .fashion-mode .pagination-footer .pagination .page-link {
+            background: rgba(255,255,255,0.9) !important;
+            border: 1px solid rgba(0,0,0,0.1) !important;
+            color: #333 !important;
+        }
+        
+        .fashion-mode .pagination-footer .pagination .page-link:hover {
+            background: rgba(0,0,0,0.05) !important;
+        }
+        
+        .fashion-mode .pagination-footer .pagination .page-link.active {
+            background: rgba(0,0,0,0.1) !important;
+        }
+        
+        .fashion-mode .filters-container {
+            background: rgba(255,255,255,0.95) !important;
+            color: #333 !important;
+            border: 1px solid rgba(0,0,0,0.1) !important;
+            backdrop-filter: blur(10px) !important;
+        }
+        
+        .fashion-mode .filters-container label {
+            color: #333 !important;
+        }
+        
+        .fashion-mode .filters-container select,
+        .fashion-mode .filters-container input {
+            background: rgba(255,255,255,0.9) !important;
+            border: 1px solid rgba(0,0,0,0.2) !important;
+            color: #333 !important;
+        }
+        
+        .fashion-mode .filters-container select:focus,
+        .fashion-mode .filters-container input:focus {
+            background: rgba(255,255,255,1) !important;
+            border-color: rgba(0,0,0,0.4) !important;
+        }
+        
+        .fashion-mode .filters-container select option {
+            background: white !important;
+            color: #333 !important;
+        }
+        
+        .fashion-mode .header {
+            background: rgba(255,255,255,0.95) !important;
+            color: #333 !important;
+            backdrop-filter: blur(10px) !important;
+        }
+        
+        .fashion-mode .header h1 {
+            color: #333 !important;
+        }
+        
+        .fashion-mode .header .btn {
+            border-color: rgba(0,0,0,0.2) !important;
+            color: #333 !important;
+        }
+        
+        .fashion-mode .header .btn:hover {
+            background: rgba(0,0,0,0.05) !important;
+            color: #333 !important;
+        }
+        
+        /* Плавные переходы для всех элементов */
+        .filters-container,
+        .header,
+        .pagination-footer,
+        .product-card,
+        .card {
+            transition: all 0.3s ease !important;
         }
 
         /* Стили для поиска */
@@ -533,6 +681,30 @@
             .score-badge {
                 font-size: 0.9rem;
             }
+            
+            .filters-container .row {
+                align-items: stretch !important;
+            }
+            
+            .category-buttons {
+                flex-direction: row;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+            
+            .category-buttons .btn {
+                flex: 1;
+                min-width: 120px;
+            }
+            
+            .fashion-mode #productsContainer {
+                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)) !important;
+            }
+            
+            .fashion-mode .image-container {
+                /* height убран для естественных пропорций */
+            }
+            }
             .pagination-footer {
                 flex-direction: column;
                 padding: 0.5rem 0.2rem;
@@ -576,8 +748,8 @@
 
     <div class="container">
         <div class="filters-container">
-            <div class="row align-items-center">
-                <div class="col-md-3">
+            <div class="row align-items-end">
+                <div class="col-md-2">
                     <div class="input-group">
                         <label for="searchInput">Поиск по артикулу</label>
                         <input type="text" class="form-control" id="searchInput" placeholder="Введите артикул..." autocomplete="off">
@@ -586,7 +758,7 @@
                         </button>
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <div class="filter-section">
                         <label for="categorySearch">Категория</label>
                         <div class="category-search-container">
@@ -598,20 +770,9 @@
                         <select id="categorySelect" class="form-select category-select" size="1">
                             <option value="all">Все категории</option>
                         </select>
-                        <div class="category-buttons mt-2">
-                            <button id="saveCategoryOrder" class="btn btn-primary">
-                                <i class="bi bi-save"></i> Сохранить порядок
-                            </button>
-                            <button id="resetCategoryOrder" class="btn btn-warning">
-                                <i class="bi bi-arrow-clockwise"></i> Сбросить порядок
-                            </button>
-                            <button id="exportCategory" class="btn btn-success">
-                                <i class="bi bi-download"></i> Выгрузить в CSV
-                            </button>
-                        </div>
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <div class="filter-section">
                         <label for="genderFilter">Пол</label>
                         <select id="genderFilter">
@@ -625,13 +786,29 @@
                         </select>
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <div class="form-check form-switch">
                         <input class="form-check-input" type="checkbox" id="hideNoPriceSwitch" checked>
                         <label class="form-check-label" for="hideNoPriceSwitch">
                             <i class="bi bi-tag-fill me-1"></i>
                             Скрыть товары без цены
                         </label>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="category-buttons">
+                        <button id="saveCategoryOrder" class="btn btn-primary btn-sm mb-1 w-100">
+                            <i class="bi bi-save"></i> Сохранить порядок
+                        </button>
+                        <button id="resetCategoryOrder" class="btn btn-warning btn-sm mb-1 w-100">
+                            <i class="bi bi-arrow-clockwise"></i> Сбросить порядок
+                        </button>
+                        <button id="exportCategory" class="btn btn-success btn-sm mb-1 w-100">
+                            <i class="bi bi-download"></i> Выгрузить в CSV
+                        </button>
+                        <button id="toggleFashionMode" class="btn btn-outline-dark btn-sm w-100">
+                            <i class="bi bi-images"></i> Фэшн-режим
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1200,6 +1377,39 @@
             } else {
                 // Экспорт конкретной категории
                 window.location.href = `/api/export_category/${selectedOption.dataset.id}`;
+            }
+        });
+        
+        // Добавляем обработчик для кнопки фэшн-режима
+        document.getElementById('toggleFashionMode').addEventListener('click', () => {
+            const body = document.body;
+            const isFashionMode = body.classList.contains('fashion-mode');
+            const button = document.getElementById('toggleFashionMode');
+            
+            if (isFashionMode) {
+                // Возвращаемся к обычному режиму
+                body.classList.remove('fashion-mode');
+                button.innerHTML = '<i class="bi bi-images"></i> Фэшн-режим';
+                button.classList.remove('btn-dark');
+                button.classList.add('btn-outline-dark');
+                
+                // Плавно возвращаем пагинацию
+                const pagination = document.querySelector('.pagination-footer');
+                if (pagination) {
+                    pagination.style.transition = 'all 0.3s ease';
+                }
+            } else {
+                // Включаем фэшн-режим
+                body.classList.add('fashion-mode');
+                button.innerHTML = '<i class="bi bi-grid-3x3"></i> Обычный режим';
+                button.classList.remove('btn-outline-dark');
+                button.classList.add('btn-dark');
+                
+                // Плавно фиксируем пагинацию
+                const pagination = document.querySelector('.pagination-footer');
+                if (pagination) {
+                    pagination.style.transition = 'all 0.3s ease';
+                }
             }
         });
 
